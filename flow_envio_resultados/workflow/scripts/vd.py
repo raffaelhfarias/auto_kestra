@@ -48,8 +48,8 @@ class ExtracaoVDOrquestrador:
         return sorted(ciclos) if ciclos else [17]
 
     def salvar_csv(self, dados, filename):
-        os.makedirs("extracoes", exist_ok=True)
-        filepath = os.path.join("extracoes", filename)
+        # Salva no diretório extracoes do projeto, subindo um nível do script
+        filepath = os.path.join("..", "extracoes", filename)
         with open(filepath, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
             writer.writerow(["VD", "Valor Praticado"])
