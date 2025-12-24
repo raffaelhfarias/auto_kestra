@@ -27,7 +27,7 @@ class ExtracaoLojaOrquestrador:
 
     def salvar_csv(self, dados, filename="resultado_loja.csv"):
         # Salva o arquivo diretamente no diretório atual para facilitar integração com Kestra
-        filepath = filename
+        filepath = os.path.join("..", "extracoes", filename)
         with open(filepath, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
             writer.writerow(["Loja", "GMV"])
