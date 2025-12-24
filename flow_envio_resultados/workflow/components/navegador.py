@@ -37,7 +37,7 @@ class Navegador:
         ]
 
         self.browser = await self.playwright.chromium.launch(
-            headless=False,
+            headless=True,
             channel="chromium",
             args=args,
             slow_mo=0 # Removido slow_mo para máxima performance dinâmica
