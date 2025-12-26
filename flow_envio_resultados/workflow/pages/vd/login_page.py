@@ -13,12 +13,10 @@ class LoginPage(BasePage):
         self.btn_login_externo = page.locator("#btnLoginExterno")
         self.btn_google_exchange = page.locator("#GoogleExchange")
         self.input_email = page.locator("#identifierId")
-        self.btn_email_next = page.get_by_role("button", name="Avançar")
-        self.btn_email_next_alt = page.get_by_role("button", name="Próxima")
+        self.btn_email_next = page.locator("//button//span[text()='Avançar']")
         
         self.input_password = page.locator("input[name='Passwd']")
-        self.btn_password_next = page.get_by_role("button", name="Avançar")
-        self.btn_password_next_alt = page.get_by_role("button", name="Próxima")
+        self.btn_password_next = page.locator("//button//span[text()='Avançar']")
         
         # Menu principal (para validar login)
         self.menu_marketing = page.locator("//div[@id='menu-cod-8']//a[text()='Marketing']")
@@ -42,20 +40,13 @@ class LoginPage(BasePage):
         
         # Fluxo Google
         await self.input_email.fill(email)
-        try:
-            await self.btn_email_next.click()
-        except:
-            await self.btn_email_next_alt.click()
-            
+        await self.btn_email_next.click()
+
         await self.input_password.fill(password)
-        try:
-            await self.btn_password_next.click()
-        except:
-            await self.btn_password_next_alt.click()
-            
-        # Screenshot após fluxo de login, antes de aguardar menu
-        await self.page.screenshot(path="screenshot_pos_login.png", full_page=True)
-        logger.info("Screenshot pós-login salva como screenshot_pos_login.png")
+        # Aguarda 1 segundo antes de clicar em 'Seguinte'
+        import asyncio
+        await asyncio.sleep(1)
+        await self.btn_password_next.click()
 
         # Aguarda o menu principal
         await self.menu_marketing.wait_for(state="visible", timeout=30000)
