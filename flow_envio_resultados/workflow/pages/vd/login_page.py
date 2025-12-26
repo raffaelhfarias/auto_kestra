@@ -27,10 +27,20 @@ class LoginPage(BasePage):
 
     async def login(self, email, password):
         import os
-        # Define caminho para screenshots na pasta monitorada pelo Kestra
+        import asyncio
+        # Define caminho para screenshots
         script_dir = os.path.dirname(__file__)
         screenshot_dir = os.path.join(script_dir, "..", "..", "..", "extracoes")
         os.makedirs(screenshot_dir, exist_ok=True)
+
+        async def safe_screenshot(name, timeout=5000):
+            """Tenta tirar um print sem travar o fluxo se as fontes demorarem."""
+            path = os.path.join(screenshot_dir, name)
+            try:
+                await self.page.screenshot(path=path, timeout=timeout)
+                logger.info(f"Screenshot salva: {name}")
+            except Exception as e:
+                logger.warning(f"Não foi possível salvar screenshot {name}: {e}")
 
         logger.info("Iniciando processo de login...")
         await self.navigate()
@@ -50,31 +60,31 @@ class LoginPage(BasePage):
         logger.info("Preenchendo email...")
         await self.input_email.wait_for(state="visible", timeout=15000)
         await self.input_email.focus()
-        await self.input_email.fill(email)
+        # Usa type com delay para parecer mais humano
+        await self.input_email.press_sequentially(email, delay=100)
+        await asyncio.sleep(1)
         await self.page.keyboard.press("Enter")
         
-        # DEBUG: Screenshot logo após o Enter no email
-        import asyncio
-        await asyncio.sleep(3)
-        debug_email_path = os.path.join(screenshot_dir, "debug_pos_email.png")
-        await self.page.screenshot(path=debug_email_path)
-        logger.info(f"Screenshot pós-email salva em: {debug_email_path}")
+        # DEBUG: Screenshot segura após o Enter no email
+        await asyncio.sleep(4)
+        await safe_screenshot("debug_pos_email.png")
 
         # Fluxo Google - Senha
         logger.info("Preenchendo senha...")
         try:
+            # Aguarda o campo de senha sumir de 'hidden' ou aparecer no DOM
             await self.input_password.wait_for(state="visible", timeout=20000)
             await self.input_password.focus()
             await self.input_password.fill(password)
             await asyncio.sleep(1)
             await self.page.keyboard.press("Enter")
         except Exception as e:
-            error_path = os.path.join(screenshot_dir, "erro_campo_senha.png")
-            await self.page.screenshot(path=error_path)
-            logger.error(f"Campo de senha não apareceu. Screenshot de erro: {error_path}")
+            await safe_screenshot("erro_campo_senha.png")
+            logger.error(f"Campo de senha não apareceu. URL atual: {self.page.url}")
             raise e
 
         # Tratativa de telas intermediárias do Google
+        await asyncio.sleep(3)
         try:
             await self.page.wait_for_function(
                 "() => !window.location.href.includes('signin/challenge/pwd') && !window.location.href.includes('signin/v2/challenge')",
@@ -82,20 +92,21 @@ class LoginPage(BasePage):
             )
         except:
             logger.warning("Ainda na página de desafio. Tentando pular...")
-            for texto in ["Not now", "Agora não", "Done", "Concluído", "Confirm", "Confirmar"]:
+            for texto in ["Not now", "Agora não", "Done", "Concluído", "Confirm", "Confirmar", "Seguinte"]:
                 btn = self.page.get_by_role("button", name=texto)
                 if await btn.is_visible(timeout=1000):
                     await btn.click()
+                    await asyncio.sleep(2)
                     break
 
         logger.info("Aguardando redirecionamento para o SGI...")
         try:
-            await self.menu_marketing.wait_for(state="visible", timeout=45000)
+            # Timeout estendido para carregar o SGI após OAuth
+            await self.menu_marketing.wait_for(state="visible", timeout=60000)
             logger.info("Login realizado com sucesso!")
         except Exception as e:
-            final_error_path = os.path.join(screenshot_dir, "falha_final_login.png")
-            await self.page.screenshot(path=final_error_path)
-            logger.error(f"Falha ao validar login. Screenshot: {final_error_path}")
+            await safe_screenshot("falha_final_login.png")
+            logger.error(f"Falha ao validar login. URL atual: {self.page.url}")
             raise e
 
         await self.ocultar_painel_superior()
