@@ -31,66 +31,63 @@ class LoginPage(BasePage):
         
         logger.info("Clicando em botão de login externo...")
         await self.btn_login_externo.click()
-        logger.info(f"URL após clicar em login externo: {self.page.url}")
         
-        # Tenta clicar no botão do Google (GoogleExchange) ou no link de colaborador
         try:
             logger.info("Aguardando botão Google...")
-            await self.btn_google_exchange.wait_for(state="visible", timeout=5000)
-            logger.info("Clicando no botão Google...")
+            await self.btn_google_exchange.wait_for(state="visible", timeout=10000)
             await self.btn_google_exchange.click()
-            logger.info(f"URL após clicar no botão Google: {self.page.url}")
         except:
-            logger.info("Botão Google não encontrado, clicando em 'Entrar como Colaborador de Franqueado'...")
+            logger.info("Botão Google não encontrado, tentando link de colaborador...")
             await self.page.get_by_role("link", name="Entrar como Colaborador de Franqueado").click()
-            logger.info(f"URL após clicar em colaborador: {self.page.url}")
         
-        # Fluxo Google
+        # Fluxo Google - Email
         logger.info("Preenchendo email...")
+        await self.input_email.wait_for(state="visible", timeout=15000)
         await self.input_email.fill(email)
-        logger.info("Clicando em 'Avançar' para email...")
-        await self.btn_email_next.click()
-        logger.info(f"URL após clicar em Avançar email: {self.page.url}")
-
+        await self.page.keyboard.press("Enter")
+        
+        # Fluxo Google - Senha
         logger.info("Preenchendo senha...")
+        # O seletor de senha pode demorar um pouco após o Enter no email
+        await self.input_password.wait_for(state="visible", timeout=15000)
         await self.input_password.fill(password)
-        # Aguarda 1 segundo antes de clicar em 'Seguinte'
+        
         import asyncio
-        await asyncio.sleep(1)
+        await asyncio.sleep(2) # Pausa humana deliberada
         
-        # Screenshot antes de clicar em 'Seguinte'
-        await self.page.screenshot(path="screenshot_antes_seguinte.png", full_page=True)
-        logger.info("Screenshot antes de 'Seguinte' salva como screenshot_antes_seguinte.png")
-        
-        # Log dos botões 'Avançar' encontrados
-        buttons_avancar = self.page.locator("//button//span[text()='Avançar']")
-        count = await buttons_avancar.count()
-        logger.info(f"Encontrados {count} botões 'Avançar'")
-        for i in range(count):
-            text = await buttons_avancar.nth(i).inner_text()
-            logger.info(f"Botão {i}: {text}")
-        
-        logger.info("Clicando em 'Seguinte' para senha...")
-        await self.btn_password_next.click()
+        logger.info("Enviando senha via tecla Enter...")
+        await self.page.keyboard.press("Enter")
 
-        # Aguarda navegação após clicar em 'Seguinte'
-        logger.info("Aguardando carregamento após senha...")
-        await self.page.wait_for_load_state("networkidle", timeout=10000)
-        logger.info(f"URL após aguardar carregamento: {self.page.url}")
+        # Tratativa de telas intermediárias do Google (Recovery email, Protect account, etc)
+        # Aguarda um tempo para ver se a URL muda ou se aparece um desafio
+        try:
+            # Espera até 15s por uma tela que NÃO seja o login do Google ou que seja o SGI
+            await self.page.wait_for_function(
+                "() => !window.location.href.includes('signin/challenge/pwd') && !window.location.href.includes('signin/v2/challenge')",
+                timeout=15000
+            )
+        except:
+            logger.warning("Ainda na página de desafio do Google. Tentando detectar botões de 'Agora não' ou 'Confirmar'...")
+            # Tenta clicar em "Agora não" ou botões similares se aparecerem
+            botoes_pular = [
+                "Not now", "Agora não", "Done", "Concluído", "Confirm", "Confirmar"
+            ]
+            for texto in botoes_pular:
+                btn = self.page.get_by_role("button", name=texto)
+                if await btn.is_visible(timeout=500):
+                    await btn.click()
+                    logger.info(f"Clicou em botão de escape: {texto}")
+                    break
 
-        # Screenshot após fluxo de login, antes de aguardar menu
-        await self.page.screenshot(path="screenshot_pos_login.png", full_page=True)
-        logger.info("Screenshot pós-login salva como screenshot_pos_login.png")
-
-        # Log da URL atual após login
-        current_url = self.page.url
-        logger.info(f"URL atual após login: {current_url}")
-
-        # Aguarda o menu principal
-        # Aguarda 1 segundo antes de aguardar o menu principal
-        await asyncio.sleep(1)
-        await self.menu_marketing.wait_for(state="visible", timeout=30000)
-        logger.info("Login realizado com sucesso!")
+        logger.info("Aguardando redirecionamento para o SGI...")
+        # Aguarda o menu principal com um timeout generoso
+        try:
+            await self.menu_marketing.wait_for(state="visible", timeout=45000)
+            logger.info("Login realizado com sucesso!")
+        except Exception as e:
+            await self.page.screenshot(path="falha_login_vd.png", full_page=True)
+            logger.error(f"Falha ao validar login. Screenshot salva em falha_login_vd.png. URL atual: {self.page.url}")
+            raise e
 
         # Tenta fechar painel superior
         await self.ocultar_painel_superior()
