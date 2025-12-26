@@ -26,8 +26,11 @@ class ExtracaoVDOrquestrador:
         self.navegador = Navegador()
         self.page = None
 
-    def ler_ciclos_do_dia(self, path="extracoes/meta_dia.csv"):
-        """Lê os ciclos do dia atual do arquivo meta_dia.csv."""
+    def ler_ciclos_do_dia(self, filename="meta_dia.csv"):
+        """Lê os ciclos do dia atual do arquivo meta_dia.csv no diretório de extrações."""
+        script_dir = os.path.dirname(__file__)
+        path = os.path.join(script_dir, "..", "..", "extracoes", filename)
+        
         ciclos = set()
         if not os.path.exists(path):
             logger.warning(f"Arquivo {path} não encontrado. Usando ciclo padrão [17].")
@@ -48,8 +51,13 @@ class ExtracaoVDOrquestrador:
         return sorted(ciclos) if ciclos else [17]
 
     def salvar_csv(self, dados, filename):
-        # Salva no diretório extracoes do projeto, subindo um nível do script
-        filepath = os.path.join("..", "extracoes", filename)
+        # Salva no diretório extracoes do projeto, relativo ao local do script
+        script_dir = os.path.dirname(__file__)
+        filepath = os.path.join(script_dir, "..", "..", "extracoes", filename)
+        
+        # Garante que o diretório existe
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        
         with open(filepath, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
             writer.writerow(["VD", "Valor Praticado"])
