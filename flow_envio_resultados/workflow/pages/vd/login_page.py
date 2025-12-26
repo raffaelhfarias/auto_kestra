@@ -56,6 +56,10 @@ class LoginPage(BasePage):
         # Aguarda o menu principal
         await self.menu_marketing.wait_for(state="visible", timeout=30000)
         logger.info("Login realizado com sucesso!")
-        
+
+        # Screenshot após login para debug
+        await self.page.screenshot(path="screenshot_pos_login.png", full_page=True)
+        logger.info("Screenshot pós-login salva como screenshot_pos_login.png")
+
         # Tenta fechar painel superior
         await self.ocultar_painel_superior()
