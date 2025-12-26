@@ -42,7 +42,16 @@ class LoginPage(BasePage):
             except Exception as e:
                 logger.warning(f"Não foi possível salvar screenshot {name}: {e}")
 
-        logger.info("Iniciando processo de login...")
+        logger.info("Verificando se já estamos logados...")
+        await self.page.goto("https://sgi.e-boticario.com.br/Default.aspx")
+        
+        # Se o menu principal já estiver visível, pula o login
+        if await self.menu_marketing.is_visible(timeout=5000):
+            logger.info("Sessão ativa detectada (Storage State). Pulando login.")
+            await self.ocultar_painel_superior()
+            return
+
+        logger.info("Sessão não detectada. Iniciando processo de login manual...")
         await self.navigate()
         
         logger.info("Clicando em botão de login externo...")

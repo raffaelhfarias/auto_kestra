@@ -43,8 +43,18 @@ class Navegador:
             slow_mo=0 # Removido slow_mo para máxima performance dinâmica
         )
 
+        import os
+        # Verifica se existe um arquivo de sessão (Storage State)
+        script_dir = os.path.dirname(__file__)
+        state_path = os.path.join(script_dir, "..", "..", "state.json")
+        storage_state = state_path if os.path.exists(state_path) else None
+        
+        if storage_state:
+            logger.info(f"Carregando sessão existente de: {state_path}")
+
         self.context = await self.browser.new_context(
             user_agent=USER_AGENT,
+            storage_state=storage_state,
             bypass_csp=True,
             locale='pt-BR',
             timezone_id='America/Sao_Paulo',
