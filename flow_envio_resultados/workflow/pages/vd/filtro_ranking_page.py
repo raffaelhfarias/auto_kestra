@@ -59,28 +59,39 @@ class RankingVendasPage(BasePage):
         await self.btn_limpar_data_pef_fim.click()
 
     async def selecionar_ciclo(self, ciclo: int):
-        ano_atual = datetime.now().year
-        value_esperado = f"{ano_atual}{ciclo:02d}"
-        logger.info(f"Selecionando ciclo {ciclo} (value={value_esperado})")
+        hoje = datetime.now()
+        ano_atual = hoje.year
         
-        # Ciclo Início
+        # Lógica de transição de ano:
+        # Se estamos em Novembro/Dezembro e o ciclo é pequeno (1, 2, 3...), provalvelmente é do ano que vem.
+        # Se o ciclo é grande (16, 17...) e estamos no começo do ano, é do ano passado.
+        if ciclo < 10 and hoje.month >= 11:
+            ano_alvo = ano_atual + 1
+        elif ciclo > 10 and hoje.month <= 2:
+            ano_alvo = ano_atual - 1
+        else:
+            ano_alvo = ano_atual
+            
+        value_esperado = f"{ano_alvo}{ciclo:02d}"
+        logger.info(f"Tentando selecionar ciclo {ciclo} (Ano: {ano_alvo}, Value: {value_esperado})")
+        
+        # Tenta selecionar o ciclo. Se falhar, tenta o ano atual como fallback.
         try:
             await self.select_ciclo_inicio.select_option(value=value_esperado)
-            await self.wait_for_loader()
-        except:
-            # Fallback caso o select_option falhe (comum em alguns componentes ASP.NET)
-            await self.page.locator("div.linha_form:nth-child(4) > span:nth-child(3) > span:nth-child(2) > span:nth-child(1)").click()
-            await self.page.locator(f"#ContentPlaceHolder1_ddlCicloFaturamentoInicial_d1 > option[value='{value_esperado}']").click()
-            await self.wait_for_loader()
-
-        # Ciclo Fim
-        try:
             await self.select_ciclo_fim.select_option(value=value_esperado)
             await self.wait_for_loader()
         except:
-            await self.page.locator("div.linha_form:nth-child(4) > span:nth-child(3) > span:nth-child(2) > span:nth-child(3)").click()
-            await self.page.locator(f"#ContentPlaceHolder1_ddlCicloFaturamentoFinal_d1 > option[value='{value_esperado}']").click()
-            await self.wait_for_loader()
+            logger.warning(f"Não encontrou value {value_esperado}. Tentando fallback com outro ano...")
+            ano_fallback = ano_atual if ano_alvo != ano_atual else ano_atual - 1
+            value_fallback = f"{ano_fallback}{ciclo:02d}"
+            try:
+                await self.select_ciclo_inicio.select_option(value=value_fallback)
+                await self.select_ciclo_fim.select_option(value=value_fallback)
+                await self.wait_for_loader()
+                logger.info(f"Selecionado via fallback: {value_fallback}")
+            except Exception as e:
+                logger.error(f"Falha total ao selecionar ciclo {ciclo}: {e}")
+                raise e
 
     async def extrair_dados(self, codigo_produto=None, agrupamento_gerencia=False):
         """Configura filtros e extrai dados da grid."""
