@@ -57,6 +57,19 @@ class LoginPage(BasePage):
         # Aguarda 1 segundo antes de clicar em 'Seguinte'
         import asyncio
         await asyncio.sleep(1)
+        
+        # Screenshot antes de clicar em 'Seguinte'
+        await self.page.screenshot(path="screenshot_antes_seguinte.png", full_page=True)
+        logger.info("Screenshot antes de 'Seguinte' salva como screenshot_antes_seguinte.png")
+        
+        # Log dos botões 'Avançar' encontrados
+        buttons_avancar = self.page.locator("//button//span[text()='Avançar']")
+        count = await buttons_avancar.count()
+        logger.info(f"Encontrados {count} botões 'Avançar'")
+        for i in range(count):
+            text = await buttons_avancar.nth(i).inner_text()
+            logger.info(f"Botão {i}: {text}")
+        
         logger.info("Clicando em 'Seguinte' para senha...")
         await self.btn_password_next.click()
 
