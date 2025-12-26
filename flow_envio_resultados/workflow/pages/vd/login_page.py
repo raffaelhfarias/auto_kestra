@@ -29,27 +29,41 @@ class LoginPage(BasePage):
         logger.info("Iniciando processo de login...")
         await self.navigate()
         
+        logger.info("Clicando em botão de login externo...")
         await self.btn_login_externo.click()
+        logger.info(f"URL após clicar em login externo: {self.page.url}")
         
         # Tenta clicar no botão do Google (GoogleExchange) ou no link de colaborador
         try:
+            logger.info("Aguardando botão Google...")
             await self.btn_google_exchange.wait_for(state="visible", timeout=5000)
+            logger.info("Clicando no botão Google...")
             await self.btn_google_exchange.click()
+            logger.info(f"URL após clicar no botão Google: {self.page.url}")
         except:
+            logger.info("Botão Google não encontrado, clicando em 'Entrar como Colaborador de Franqueado'...")
             await self.page.get_by_role("link", name="Entrar como Colaborador de Franqueado").click()
+            logger.info(f"URL após clicar em colaborador: {self.page.url}")
         
         # Fluxo Google
+        logger.info("Preenchendo email...")
         await self.input_email.fill(email)
+        logger.info("Clicando em 'Avançar' para email...")
         await self.btn_email_next.click()
+        logger.info(f"URL após clicar em Avançar email: {self.page.url}")
 
+        logger.info("Preenchendo senha...")
         await self.input_password.fill(password)
         # Aguarda 1 segundo antes de clicar em 'Seguinte'
         import asyncio
         await asyncio.sleep(1)
+        logger.info("Clicando em 'Seguinte' para senha...")
         await self.btn_password_next.click()
 
         # Aguarda navegação após clicar em 'Seguinte'
+        logger.info("Aguardando carregamento após senha...")
         await self.page.wait_for_load_state("networkidle", timeout=10000)
+        logger.info(f"URL após aguardar carregamento: {self.page.url}")
 
         # Screenshot após fluxo de login, antes de aguardar menu
         await self.page.screenshot(path="screenshot_pos_login.png", full_page=True)
