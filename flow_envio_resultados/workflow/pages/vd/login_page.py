@@ -48,6 +48,14 @@ class LoginPage(BasePage):
         await asyncio.sleep(1)
         await self.btn_password_next.click()
 
+        # Screenshot após fluxo de login, antes de aguardar menu
+        await self.page.screenshot(path="screenshot_pos_login.png", full_page=True)
+        logger.info("Screenshot pós-login salva como screenshot_pos_login.png")
+
+        # Log da URL atual após login
+        current_url = self.page.url
+        logger.info(f"URL atual após login: {current_url}")
+
         # Aguarda o menu principal
         # Aguarda 1 segundo antes de aguardar o menu principal
         await asyncio.sleep(1)
