@@ -48,6 +48,9 @@ class LoginPage(BasePage):
         await asyncio.sleep(1)
         await self.btn_password_next.click()
 
+        # Aguarda navegação após clicar em 'Seguinte'
+        await self.page.wait_for_load_state("networkidle", timeout=10000)
+
         # Screenshot após fluxo de login, antes de aguardar menu
         await self.page.screenshot(path="screenshot_pos_login.png", full_page=True)
         logger.info("Screenshot pós-login salva como screenshot_pos_login.png")
