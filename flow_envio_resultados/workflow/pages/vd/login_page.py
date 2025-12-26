@@ -49,6 +49,8 @@ class LoginPage(BasePage):
         await self.btn_password_next.click()
 
         # Aguarda o menu principal
+        # Aguarda 1 segundo antes de aguardar o menu principal
+        await asyncio.sleep(1)
         await self.menu_marketing.wait_for(state="visible", timeout=30000)
         logger.info("Login realizado com sucesso!")
 
