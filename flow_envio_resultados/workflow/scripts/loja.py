@@ -45,8 +45,8 @@ class ExtracaoLojaOrquestrador:
                 })
 
             # Exibe o JSON para o Kestra capturar
-            # O Kestra captura tudo que for impresso no formato ::{ "key": "value" }::
-            print(f"::{{ \"outputs\": {json.dumps(resultados_finais)} }}::")
+            # O Kestra exige que o valor de 'outputs' seja um objeto/dicionário
+            print(json.dumps({"outputs": {"resultado": resultados_finais}}))
             
             logger.info(f"Processo Loja concluído! {len(resultados_finais)} lojas extraídas.")
 

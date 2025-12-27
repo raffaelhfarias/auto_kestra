@@ -56,14 +56,14 @@ def formatar_mensagem(dados):
     return "\n".join(msg)
 
 def enviar_whatsapp(dados_loja):
-    if not EVOLUTION_URL or not EVOLUTION_API_KEY:
+    if not EVOLUTION_API_URL or not EVOLUTION_API_KEY:
         logger.error("Credenciais da Evolution API não encontradas!")
         return
 
     texto_formatado = formatar_mensagem(dados_loja)
     
     # Endpoint da Evolution API para envio de texto
-    url = f"{EVOLUTION_URL}/message/sendText/{EVOLUTION_INSTANCE}"
+    url = f"{EVOLUTION_API_URL}/message/sendText/{EVOLUTION_INSTANCE}"
     
     headers = {
         "Content-Type": "application/json",
@@ -71,7 +71,7 @@ def enviar_whatsapp(dados_loja):
     }
     
     payload = {
-        "number": WHATSAPP_DESTINO,
+        "number": WHATSAPP_GROUP_LOJA,
         "text": texto_formatado,
         "delay": 1200,
         "linkPreview": False
