@@ -1,5 +1,5 @@
 import logging
-import csv
+import json
 import os
 import asyncio
 from dotenv import load_dotenv
@@ -25,16 +25,6 @@ class ExtracaoLojaOrquestrador:
         self.navegador = Navegador()
         self.page = None
 
-    def salvar_csv(self, dados, filename="resultado_loja.csv"):
-        # Salva o arquivo diretamente no diretório atual para facilitar integração com Kestra
-        script_dir = os.path.dirname(__file__)
-        filepath = os.path.join(script_dir, "..", "..", "extracoes", filename)
-        with open(filepath, "w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerow(["Loja", "GMV"])
-            writer.writerows(dados)
-        logger.info(f"Dados salvos em {filepath}")
-
     async def executar(self):
         try:
             self.page = await self.navegador.setup_browser()
@@ -46,8 +36,19 @@ class ExtracaoLojaOrquestrador:
             await consulta_page.navegar_para_consulta()
             dados = await consulta_page.extrair_dados()
             
-            self.salvar_csv(dados)
-            logger.info("Processo Loja concluído com sucesso!")
+            # Formata os dados para uma lista de dicionários (mais fácil no Kestra/Evolution)
+            resultados_finais = []
+            for item in dados:
+                resultados_finais.append({
+                    "loja": item[0],
+                    "gmv": item[1]
+                })
+
+            # Exibe o JSON para o Kestra capturar
+            # O Kestra captura tudo que for impresso no formato ::{ "key": "value" }::
+            print(f"::{{ \"outputs\": {json.dumps(resultados_finais)} }}::")
+            
+            logger.info(f"Processo Loja concluído! {len(resultados_finais)} lojas extraídas.")
 
         except Exception as e:
             logger.error(f"Falha na execução Loja: {e}", exc_info=True)
