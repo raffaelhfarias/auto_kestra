@@ -48,7 +48,7 @@ class ExtracaoVDOrquestrador:
         except Exception as e:
             logger.error(f"Erro ao ler ciclos: {e}")
         
-        return sorted(ciclos) if ciclos else [17]
+        return sorted(ciclos) if ciclos else [17, 1]
 
     def salvar_csv(self, dados, filename):
         # Salva no diretório extracoes do projeto, relativo ao local do script
