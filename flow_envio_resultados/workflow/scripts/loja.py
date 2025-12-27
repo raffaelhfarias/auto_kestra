@@ -1,17 +1,18 @@
 import logging
 import json
 import os
+import sys
 import asyncio
 from dotenv import load_dotenv
 from workflow.components.navegador import Navegador
 from workflow.pages.loja.login_page import LojaLoginPage
 from workflow.pages.loja.filtro_consulta_page import ConsultaGerencialPage
 
-# Configuração de Logging
+# Configuração de Logging para o stderr (não interfere no stdout)
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    handlers=[logging.StreamHandler()]
+    handlers=[logging.StreamHandler(sys.stderr)]
 )
 logger = logging.getLogger("ExtracaoLoja")
 
@@ -36,7 +37,7 @@ class ExtracaoLojaOrquestrador:
             await consulta_page.navegar_para_consulta()
             dados = await consulta_page.extrair_dados()
             
-            # Formata os dados para uma lista de dicionários (mais fácil no Kestra/Evolution)
+            # Formata os dados
             resultados_finais = []
             for item in dados:
                 resultados_finais.append({
@@ -44,14 +45,13 @@ class ExtracaoLojaOrquestrador:
                     "gmv": item[1]
                 })
 
-            # Exibe o JSON para o Kestra capturar
-            # O Kestra exige que o valor de 'outputs' seja um objeto/dicionário
-            print(json.dumps({"outputs": {"resultado": resultados_finais}}))
-            
-            logger.info(f"Processo Loja concluído! {len(resultados_finais)} lojas extraídas.")
+            # Imprime APENAS o JSON no stdout
+            sys.stdout.write(json.dumps(resultados_finais, ensure_ascii=False))
+            sys.stdout.flush()
 
         except Exception as e:
             logger.error(f"Falha na execução Loja: {e}", exc_info=True)
+            sys.exit(1)
         finally:
             await self.navegador.stop_browser()
 
