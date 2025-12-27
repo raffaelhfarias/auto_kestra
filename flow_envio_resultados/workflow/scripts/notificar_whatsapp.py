@@ -89,16 +89,15 @@ def enviar_whatsapp(dados_loja):
         raise e
 
 if __name__ == "__main__":
-    # O Kestra passará o JSON via argumento ou variável de ambiente
-    # Vamos pegar da variável de ambiente que passaremos no YAML
-    dados_raw = os.environ.get("DADOS_LOJA")
+    # Seguindo o padrão de Outputs do Kestra: ler de um arquivo local
+    path_arquivo = os.environ.get("DADOS_ARQUIVO")
     
-    if dados_raw:
+    if path_arquivo and os.path.exists(path_arquivo):
         try:
-            # O Kestra às vezes passa strings JSON com escape
-            dados = json.loads(dados_raw)
+            with open(path_arquivo, "r", encoding="utf-8") as f:
+                dados = json.load(f)
             enviar_whatsapp(dados)
         except Exception as e:
-            logger.error(f"Erro ao processar dados para envio: {e}")
+            logger.error(f"Erro ao ler arquivo de dados {path_arquivo}: {e}")
     else:
-        logger.error("Nenhum dado de loja encontrado na variável DADOS_LOJA")
+        logger.error(f"Arquivo de dados não encontrado: {path_arquivo}")

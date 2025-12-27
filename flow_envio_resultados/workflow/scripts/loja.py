@@ -45,9 +45,13 @@ class ExtracaoLojaOrquestrador:
                     "gmv": item[1]
                 })
 
-            # Imprime APENAS o JSON no stdout
-            sys.stdout.write(json.dumps(resultados_finais, ensure_ascii=False))
-            sys.stdout.flush()
+            # SALVAMENTO COMPATÍVEL COM KESTRA OUTPUTS
+            # Salvamos na pasta atual para o Kestra capturar via outputFiles automaticamente
+            output_filename = "resultado_loja.json"
+            with open(output_filename, "w", encoding="utf-8") as f:
+                json.dump(resultados_finais, f, ensure_ascii=False, indent=4)
+            
+            logger.info(f"Processo Loja concluído! {len(resultados_finais)} lojas salvas em {output_filename}")
 
         except Exception as e:
             logger.error(f"Falha na execução Loja: {e}", exc_info=True)
