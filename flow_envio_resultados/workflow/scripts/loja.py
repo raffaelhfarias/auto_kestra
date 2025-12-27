@@ -28,6 +28,7 @@ class ExtracaoLojaOrquestrador:
 
     async def executar(self):
         try:
+            logger.info("--- Iniciando Orquestração de Extração LOJA ---")
             self.page = await self.navegador.setup_browser()
             
             login_page = LojaLoginPage(self.page)
@@ -46,18 +47,27 @@ class ExtracaoLojaOrquestrador:
                 })
 
             # SALVAMENTO COMPATÍVEL COM KESTRA OUTPUTS
-            # Salvamos na pasta atual para o Kestra capturar via outputFiles automaticamente
             output_filename = "resultado_loja.json"
             with open(output_filename, "w", encoding="utf-8") as f:
                 json.dump(resultados_finais, f, ensure_ascii=False, indent=4)
             
-            logger.info(f"Processo Loja concluído! {len(resultados_finais)} lojas salvas em {output_filename}")
+            # Print nativo Kestra (opcional)
+            print(f"::{json.dumps({'outputs': {'resultado': resultados_finais}})}::")
+            
+            logger.info(f"Sucesso! {len(resultados_finais)} lojas salvas em {output_filename}")
 
         except Exception as e:
-            logger.error(f"Falha na execução Loja: {e}", exc_info=True)
+            logger.error(f"FALHA CRÍTICA: {e}", exc_info=True)
+            if self.page:
+                try:
+                    await self.page.screenshot(path="erro_extracao.png")
+                    logger.info("Screenshot de erro salva: erro_extracao.png")
+                except:
+                    logger.warning("Não foi possível tirar screenshot do erro.")
             sys.exit(1)
         finally:
             await self.navegador.stop_browser()
+            logger.info("--- Finalizando Orquestração ---")
 
 if __name__ == "__main__":
     orquestrador = ExtracaoLojaOrquestrador()

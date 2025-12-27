@@ -26,6 +26,7 @@ def formatar_valor(valor):
 
 def formatar_mensagem(dados):
     """Cria uma mensagem elegante seguindo o template do usuário."""
+    logger.info(f"Iniciando formatação da mensagem para {len(dados)} lojas...")
     msg = ["➡️ *Parcial Receita LOJA*", ""]
     
     realizado = 0
@@ -38,32 +39,36 @@ def formatar_mensagem(dados):
     msg.append("")
     
     if LOJA_META > 0:
+        logger.info(f"Meta detectada: R$ {LOJA_META:,.2f}. Calculando indicadores...")
         msg.append(f"🎯 *Meta*: {formatar_valor(LOJA_META)}")
         msg.append(f"💰 *Realizado*: {formatar_valor(realizado)}")
         
         diferenca = realizado - LOJA_META
         
         if diferenca < 0:
-            # Quando o meta ainda não foi batido (negativo)
             msg.append(f"🔴 *Faltante*: {formatar_valor(diferenca)}")
+            logger.info(f"Status: Faltante de R$ {abs(diferenca):,.2f}")
         else:
-            # Quando o meta foi ultrapassado
             msg.append(f"🎉 *Ultrapassou*: {formatar_valor(diferenca)}")
+            logger.info("Status: Meta batida/ultrapassada!")
     else:
-        # Caso não exista meta, exibe apenas o realizado
+        logger.info("Nenhuma meta definida (LOJA_META=0). Exibindo apenas realizado.")
         msg.append(f"💰 *Realizado*: {formatar_valor(realizado)}")
     
     return "\n".join(msg)
 
 def enviar_whatsapp(dados_loja):
+    logger.info(f"Preparando envio para Evolution API (Instância: {EVOLUTION_INSTANCE})...")
+    
     if not EVOLUTION_API_URL or not EVOLUTION_API_KEY:
-        logger.error("Credenciais da Evolution API não encontradas!")
+        logger.error("ERRO: Credenciais da Evolution API (URL ou API_KEY) ausentes no ambiente.")
         return
 
     texto_formatado = formatar_mensagem(dados_loja)
     
     # Endpoint da Evolution API para envio de texto
     url = f"{EVOLUTION_API_URL}/message/sendText/{EVOLUTION_INSTANCE}"
+    logger.info(f"Destino da mensagem: {WHATSAPP_GROUP_LOJA}")
     
     headers = {
         "Content-Type": "application/json",
@@ -78,26 +83,32 @@ def enviar_whatsapp(dados_loja):
     }
 
     try:
+        logger.info("Enviando requisição POST para Evolution API...")
         response = requests.post(url, json=payload, headers=headers)
         response.raise_for_status()
-        logger.info("Mensagem enviada com sucesso para o WhatsApp!")
+        logger.info(f"NOTIFICAÇÃO ENVIADA! Status Code: {response.status_code}")
         return response.json()
     except Exception as e:
-        logger.error(f"Erro ao enviar para Evolution API: {e}")
+        logger.error(f"FALHA NO ENVIO: {e}")
         if hasattr(e, 'response') and e.response:
-            logger.error(f"Resposta da API: {e.response.text}")
+            logger.error(f"Resposta bruta da API: {e.response.text}")
         raise e
 
 if __name__ == "__main__":
-    # Seguindo o padrão de Outputs do Kestra: ler de um arquivo local
+    logger.info("--- Iniciando Script de Notificação WhatsApp ---")
     path_arquivo = os.environ.get("DADOS_ARQUIVO")
     
     if path_arquivo and os.path.exists(path_arquivo):
         try:
+            logger.info(f"Lendo dados do arquivo: {path_arquivo}")
             with open(path_arquivo, "r", encoding="utf-8") as f:
                 dados = json.load(f)
             enviar_whatsapp(dados)
         except Exception as e:
-            logger.error(f"Erro ao ler arquivo de dados {path_arquivo}: {e}")
+            logger.error(f"Erro ao processar arquivo JSON: {e}", exc_info=True)
+            sys.exit(1)
     else:
-        logger.error(f"Arquivo de dados não encontrado: {path_arquivo}")
+        logger.error(f"Arquivo de entrada não encontrado ou vazio: {path_arquivo}")
+        sys.exit(1)
+    
+    logger.info("--- Notificação Finalizada ---")

@@ -18,17 +18,25 @@ class ConsultaGerencialPage(BasePage):
         self.tabela_resultados = page.locator(".flora-table")
 
     async def navegar_para_consulta(self):
-        logger.info("Navegando para Consulta Gerencial de Vendas...")
+        logger.info("Iniciando navegação pelos menus...")
         await self.menu_venda.click()
+        logger.debug("Menu 'Venda' clicado.")
         await self.menu_relatorios.click()
+        logger.debug("Menu 'Relatórios' clicado.")
         await self.menu_consulta_gerencial.click()
+        logger.info("Página de Consulta Gerencial acessada.")
 
     async def extrair_dados(self):
+        logger.info("Clicando no botão 'Consultar'...")
         await self.btn_consultar.click()
-        await self.tabela_resultados.wait_for(state="visible", timeout=15000)
+        
+        logger.info("Aguardando visibilidade da tabela de resultados (.flora-table)...")
+        await self.tabela_resultados.wait_for(state="visible", timeout=30000)
         
         linhas = self.tabela_resultados.locator(".flora-table-row")
         count = await linhas.count()
+        logger.info(f"Tabela carregada. Total de linhas detectadas: {count}")
+        
         resultados = []
 
         # Exclui a última linha (total)
@@ -37,14 +45,19 @@ class ConsultaGerencialPage(BasePage):
             loja_el = linha.locator("div.flora-table-cell:nth-child(1)")
             gmv_el = linha.locator("div.flora-table-cell:nth-child(3)")
             
-            loja = (await loja_el.inner_text()).strip()
-            gmv_raw = await gmv_el.inner_text()
-            
-            # Limpeza de valor
-            gmv_limpo = gmv_raw.replace('R$', '').replace(' ', '').replace('.', '').replace(',', '.').strip()
             try:
-                resultados.append([loja, float(gmv_limpo)])
-            except ValueError:
+                loja = (await loja_el.inner_text()).strip()
+                gmv_raw = await gmv_el.inner_text()
+                
+                # Limpeza de valor
+                gmv_limpo = gmv_raw.replace('R$', '').replace(' ', '').replace('.', '').replace(',', '.').strip()
+                valor_float = float(gmv_limpo)
+                
+                logger.debug(f"Processando linha {i+1}: Loja={loja}, Valor={valor_float}")
+                resultados.append([loja, valor_float])
+            except Exception as e:
+                logger.warning(f"Erro ao processar linha {i+1}: {e}")
                 continue
                 
+        logger.info(f"Extração concluída com sucesso. {len(resultados)} lojas capturadas.")
         return resultados

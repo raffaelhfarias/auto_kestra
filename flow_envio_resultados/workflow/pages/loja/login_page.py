@@ -20,15 +20,25 @@ class LojaLoginPage(BasePage):
 
     async def login(self, username, password):
         await self.navigate()
-        # Aguarda a página carregar completamente e elementos ficarem visíveis
-        await self.page.wait_for_load_state('networkidle')
-        await self.input_usuario.wait_for(state="visible", timeout=10000)
-        await self.input_senha.wait_for(state="visible", timeout=10000)
-        await self.btn_entrar.wait_for(state="visible", timeout=10000)
         
+        logger.info("Aguardando carregamento da rede (networkidle)...")
+        await self.page.wait_for_load_state('networkidle')
+        
+        logger.info(f"Procurando campo de usuário: {username[:3]}***")
+        await self.input_usuario.wait_for(state="visible", timeout=15000)
         await self.input_usuario.fill(username)
+        
+        logger.info("Preenchendo campo de senha...")
+        await self.input_senha.wait_for(state="visible", timeout=10000)
         await self.input_senha.fill(password)
+        
+        logger.info("Clicando no botão 'Entrar'...")
         await self.btn_entrar.click()
-        # Aguarda redirecionamento para a home
-        await self.page.wait_for_url("**/app/#/", timeout=15000)
-        logger.info("Login Loja realizado com sucesso!")
+        
+        logger.info("Aguardando confirmação de login (URL da Home)...")
+        try:
+            await self.page.wait_for_url("**/app/#/", timeout=20000)
+            logger.info("Login Loja realizado com sucesso!")
+        except Exception as e:
+            logger.error(f"Falha ao confirmar login. URL atual: {self.page.url}")
+            raise e
