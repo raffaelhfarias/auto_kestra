@@ -20,16 +20,27 @@ GROUP = os.environ.get("WHATSAPP_GROUP_ID")
 
 def enviar(resultado):
     status = resultado.get('status')
-    if status not in ['novo_formulario', 'primeiro_registro']:
+    
+    # Permitir notificação para sem_novidades também
+    if status not in ['novo_formulario', 'primeiro_registro', 'sem_novidades']:
         logger.info(f"Status '{status}' não requer notificação.")
         return
 
     if status == 'novo_formulario':
         detalhes = resultado.get('detalhes', {})
-        resumo = "\n".join([f"*{k}:* {v}" for k, v in detalhes.items()])
+        resumo = "\n".join([f"*{k}:* {v}" for k, v in detalhes.items()]) if detalhes else "(Sem detalhes)"
         msg = f"⚠️ *NOVA AUDITORIA DETECTADA!* ⚠️\n\n📄 *{resultado.get('formulario')}*\n\n{resumo}"
-    else:
+    elif status == 'primeiro_registro':
         msg = f"✅ *Monitoramento VIDIBR Iniciado*\n\n🆕 Primeiro: *{resultado.get('formulario')}*\n📋 Total: {resultado.get('total_formularios')}"
+    elif status == 'sem_novidades':
+        msg = (
+            "✅ *Monitoramento ativo*\n\n"
+            "💤 Nenhum novo formulário.\n\n"
+            f"📋 Formulários encontrados: {resultado.get('total_formularios', 0)}\n"
+            f"📝 Mais recente: {resultado.get('formulario_atual', 'N/A')}"
+        )
+    else:
+        return
 
     endpoint = f"{URL}/message/sendText/{INSTANCE}"
     headers = {"apikey": KEY, "Content-Type": "application/json"}
