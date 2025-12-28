@@ -23,7 +23,7 @@ class Navegador:
 
         # Argumentos críticos para estabilidade e evasão
         args = [
-            #"--headless=new",
+            "--headless=new",
             "--disable-features=IsolateOrigins,site-per-process",
             "--disable-blink-features=AutomationControlled",
             "--no-sandbox",
@@ -36,7 +36,7 @@ class Navegador:
         ]
 
         self.browser = await self.playwright.chromium.launch(
-            headless=False,
+            headless=True,
             channel="chromium",
             args=args
         )
