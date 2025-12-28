@@ -37,76 +37,76 @@ class VidibrAuditoriaPage(BasePage):
         return formularios
 
     async def selecionar_formulario_e_entrar(self, nome_formulario: str):
-        """Seleciona um formulário e confirma, aguardando a transição."""
+        """Seleciona um formulário e confirma, seguindo os tempos de delay do modelo."""
         logger.info(f"Selecionando: {nome_formulario}")
-        # Localiza o rádio pelo nome exato
         radio = self.radiogroup_jobs.get_by_role("radio", name=nome_formulario)
-        await radio.wait_for(state="visible", timeout=10000)
+        await radio.wait_for(state="visible")
         await radio.click()
         
-        # Pequeno delay para garantir que o rádio marcou como selecionado (comum em Ionic)
-        await asyncio.sleep(1)
+        # Delay de 500ms como no modelo
+        await asyncio.sleep(0.5)
         
-        logger.info("Clicando em OK e aguardando transição...")
+        logger.info("Confirmando seleção (OK)...")
         await self.btn_dialog_ok.click()
         
-        # ESPERA CRÍTICA: O dialog precisa sumir para sabermos que a ação foi processada
-        await self.dialog_jobs.wait_for(state="hidden", timeout=15000)
+        # POST_CLICK_DELAY do modelo (2 segundos) para permitir que a SPA processe
+        await asyncio.sleep(2)
         
-        # Aguarda loaders globais do site
+        # Aguarda o carregamento técnico
         await self.wait_for_loader()
         await self.page.wait_for_load_state('networkidle')
 
-    async def extrair_detalhes(self) -> Dict[str, str]:
-        """Extrai detalhes do formulário aberto com espera robusta."""
-        logger.info("Iniciando extração de detalhes...")
-        
-        # Elemento principal que indica que os detalhes carregaram
-        box = self.page.locator(".box-pergunta").first
-        
-        try:
-            # Aumentado para 30s pois esta página de detalhes costuma ser pesada
-            await box.wait_for(state="visible", timeout=30000)
-        except Exception as e:
-            logger.error("Timeout: O elemento '.box-pergunta' não carregou a tempo.")
-            # Opcional: tirar um print apenas para debug local se necessário
-            raise e
+    def _limpar_prefixo(self, texto: str, prefixo: str) -> str:
+        """Remove o prefixo (ex: 'CNPJ:') do valor extraído."""
+        if texto.lower().startswith(prefixo.lower()):
+            return texto[len(prefixo):].strip(': ').strip()
+        return texto.strip()
 
-        # Tenta expandir o "Ver mais" se existir
+    async def extrair_detalhes(self) -> Dict[str, str]:
+        """Extrai detalhes do formulário seguindo a robustez do script modelo."""
+        logger.info("Iniciando extração de detalhes do formulário...")
+        
+        # Tenta clicar em "Ver mais"
         try:
             ver_mais = self.page.get_by_role("link", name="Ver mais")
             if await ver_mais.count() > 0:
                 await ver_mais.first.click()
-                await asyncio.sleep(1)
+                await asyncio.sleep(1) # Delay após expansão
         except: pass
 
-        info = {}
-        try:
-            # Local visitado
-            local = self.page.locator('[data-cy="abrirQuestionarioJob"]')
-            info['Local visitado'] = (await local.text_content()).strip() if await local.count() > 0 else 'N/E'
+        box = self.page.locator(".box-pergunta").first
+        # Timeout de 15s como no modelo
+        await box.wait_for(state="visible", timeout=15000)
 
-            # Campos padrões
-            campos = ['CNPJ', 'Endereço', 'Período', 'Número do QT', 'Número da Loja', 'Data da Visita', 'Situação']
-            for campo in campos:
+        info = {}
+        
+        # Local visitado via data-cy
+        local_el = self.page.locator('[data-cy="abrirQuestionarioJob"]')
+        info['Local visitado'] = (await local_el.text_content()).strip() if await local_el.count() > 0 else 'N/E'
+
+        # Campos com strong labels (seguindo lista do modelo)
+        campos_strong = ['CNPJ', 'Endereço', 'Período', 'Número do QT', 
+                         'Número da Loja', 'Data da Visita', 'Situação']
+        
+        for campo in campos_strong:
+            try:
                 divisor = f"{campo}:"
-                el = box.locator(f"span:has(strong:text-is('{divisor}'))")
-                if await el.count() > 0:
-                    texto = await el.first.text_content()
-                    idx = texto.lower().find(divisor.lower()) + len(divisor)
-                    info[campo] = texto[idx:].strip()
+                # Seletor exato do modelo: span que contém um strong com o texto do campo
+                elemento = box.locator(f"span:has(strong:text-is('{divisor}'))")
+                if await elemento.count() > 0:
+                    texto_bruto = await elemento.first.text_content()
+                    info[campo] = self._limpar_prefixo(texto_bruto, divisor)
                 else:
                     info[campo] = 'N/E'
+            except:
+                info[campo] = 'Erro'
 
-            # Nome da Loja
+        # Loja via readmore-component
+        try:
             loja_el = box.locator("readmore-component > div")
-            if await loja_el.count() > 0:
-                info['Loja'] = (await loja_el.text_content()).strip()
-            else:
-                info['Loja'] = 'N/E'
-                
-        except Exception as e:
-            logger.error(f"Erro ao ler campos do formulário: {e}")
-            raise e
+            info['Loja'] = (await loja_el.text_content()).strip() if await loja_el.count() > 0 else 'N/E'
+        except:
+            info['Loja'] = 'Erro'
 
+        logger.info("Detalhes extraídos com sucesso!")
         return info
