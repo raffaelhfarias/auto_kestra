@@ -1,4 +1,4 @@
-# Auto Kestra - Automações VIDIBR e Resultados
+# Auto Kestra - Automações
 
 Repositório central para automações de extração de dados e auditoria, orquestradas pelo **Kestra** e utilizando **Playwright** para web scraping.
 
@@ -6,7 +6,7 @@ Repositório central para automações de extração de dados e auditoria, orque
 
 O repositório está dividido em módulos independentes, cada um com sua própria lógica de workflow, páginas (POM) e scripts:
 
-- **`flow_envio_auditoria/`**: Automação integrada com o portal VIDIBR para monitoramento de auditorias e envio de notificações detalhadas via WhatsApp.
+- **`flow_envio_auditoria/`**: Automação integrada com o portal X para monitoramento de auditorias e envio de notificações detalhadas via WhatsApp.
 - **`flow_envio_resultados/`**: Extração de indicadores de desempenho (Loja) e envio de resumos de metas e resultados.
 
 ## 🛠️ Stack Tecnológica
