@@ -9,104 +9,120 @@ logger = logging.getLogger(__name__)
 class VidibrAuditoriaPage(BasePage):
     def __init__(self, page: Page):
         super().__init__(page)
-        self.btn_avaliacoes = page.get_by_role("button", name="Avaliações Realizadas")
-        self.dialog_jobs = page.get_by_role("dialog", name="Selecione o Job:")
-        self.radiogroup_jobs = self.dialog_jobs.get_by_role("radiogroup", name="Selecione o Job:")
-        self.btn_dialog_ok = self.dialog_jobs.get_by_role("button", name="OK")
+        # Botão principal da Home usando data-cy fornecido
+        self.btn_avaliacoes = page.locator("button[data-cy='avaliacoes-realizadas']")
+        
+        # Elementos do Pop-up de Jobs
+        self.dialog_wrapper = page.locator(".alert-wrapper")
+        self.radio_options = page.locator("button.alert-radio")
+        self.radio_labels = page.locator(".alert-radio-label")
+        self.btn_ok = page.locator("button.alert-button").filter(has_text="OK")
+        self.btn_cancel = page.locator("button.alert-button").filter(has_text="Cancel")
 
     async def abrir_selecao_jobs(self):
-        logger.info("Abrindo seleção de Avaliações Realizadas...")
+        logger.info("Abrindo seleção de Avaliações Realizadas (data-cy)...")
         await self.btn_avaliacoes.wait_for(state="visible", timeout=15000)
         await self.btn_avaliacoes.click()
-        await self.dialog_jobs.wait_for(state="visible", timeout=15000)
+        await self.dialog_wrapper.wait_for(state="visible", timeout=15000)
 
     async def listar_formularios(self) -> List[str]:
-        """Lista os nomes dos formulários disponíveis."""
-        logger.info("Listando formulários...")
-        radios = self.radiogroup_jobs.get_by_role("radio")
-        count = await radios.count()
+        """Lista os nomes dos formulários disponíveis no pop-up."""
+        logger.info("Listando formulários disponíveis no alerta...")
+        # Aguarda as labels estarem presentes
+        await self.radio_labels.first.wait_for(state="visible", timeout=10000)
         
-        formularios = []
-        for i in range(count):
-            radio = radios.nth(i)
-            texto = await radio.get_attribute("aria-label") or await radio.text_content()
-            texto = texto.strip() if texto else ""
-            if texto and texto.lower() != 'todos':
-                formularios.append(texto)
+        labels = await self.radio_labels.all_text_contents()
+        formularios = [text.strip() for text in labels if text and text.strip().lower() != 'todos']
         
+        logger.info(f"Formulários encontrados: {len(formularios)}")
         return formularios
 
     async def selecionar_formulario_e_entrar(self, nome_formulario: str):
-        """Seleciona um formulário e confirma, seguindo os tempos de delay do modelo."""
-        logger.info(f"Selecionando: {nome_formulario}")
-        radio = self.radiogroup_jobs.get_by_role("radio", name=nome_formulario)
-        await radio.wait_for(state="visible")
-        await radio.click()
+        """Seleciona o formulário exato e confirma."""
+        logger.info(f"Localizando rádio para: {nome_formulario}")
         
-        # Delay de 500ms como no modelo
-        await asyncio.sleep(0.5)
+        # Localiza o botão de rádio que contém o texto da label correta
+        # Estrutura: <button role="radio">...<div class="alert-radio-label">TEXTO</div>...</button>
+        radio_button = self.page.locator("button.alert-radio").filter(has=self.page.locator(".alert-radio-label", has_text=nome_formulario))
         
-        logger.info("Confirmando seleção (OK)...")
-        await self.btn_dialog_ok.click()
+        await radio_button.wait_for(state="visible", timeout=10000)
+        await radio_button.click()
         
-        # POST_CLICK_DELAY do modelo (2 segundos) para permitir que a SPA processe
-        await asyncio.sleep(2)
+        # Delay de segurança para garantir a seleção (padrão Ionic)
+        await asyncio.sleep(1)
         
-        # Aguarda o carregamento técnico
+        logger.info("Clicando em OK...")
+        await self.btn_ok.click()
+        
+        # Aguarda o pop-up sumir e a página carregar
+        await self.dialog_wrapper.wait_for(state="hidden", timeout=15000)
+        await asyncio.sleep(2) # POST_CLICK_DELAY
         await self.wait_for_loader()
         await self.page.wait_for_load_state('networkidle')
 
     def _limpar_prefixo(self, texto: str, prefixo: str) -> str:
         """Remove o prefixo (ex: 'CNPJ:') do valor extraído."""
         if texto.lower().startswith(prefixo.lower()):
-            return texto[len(prefixo):].strip(': ').strip()
+            idx = texto.lower().find(prefixo.lower()) + len(prefixo)
+            return texto[idx:].strip(': ').strip()
         return texto.strip()
 
     async def extrair_detalhes(self) -> Dict[str, str]:
-        """Extrai detalhes do formulário seguindo a robustez do script modelo."""
-        logger.info("Iniciando extração de detalhes do formulário...")
+        """Extrai detalhes do formulário usando a estrutura HTML real fornecida."""
+        logger.info("Iniciando extração robusta de detalhes...")
         
-        # Tenta clicar em "Ver mais"
+        # Box pergunta principal
+        box = self.page.locator(".box-pergunta").first
+        await box.wait_for(state="visible", timeout=20000)
+
+        # Tenta expandir "Ver mais"
         try:
-            ver_mais = self.page.get_by_role("link", name="Ver mais")
+            ver_mais = self.page.locator("a").filter(has_text="Ver mais")
             if await ver_mais.count() > 0:
                 await ver_mais.first.click()
-                await asyncio.sleep(1) # Delay após expansão
+                await asyncio.sleep(1)
         except: pass
-
-        box = self.page.locator(".box-pergunta").first
-        # Timeout de 15s como no modelo
-        await box.wait_for(state="visible", timeout=15000)
 
         info = {}
         
-        # Local visitado via data-cy
-        local_el = self.page.locator('[data-cy="abrirQuestionarioJob"]')
+        # Local Visitado (H2 com data-cy)
+        local_el = box.locator('[data-cy="abrirQuestionarioJob"]')
         info['Local visitado'] = (await local_el.text_content()).strip() if await local_el.count() > 0 else 'N/E'
 
-        # Campos com strong labels (seguindo lista do modelo)
-        campos_strong = ['CNPJ', 'Endereço', 'Período', 'Número do QT', 
-                         'Número da Loja', 'Data da Visita', 'Situação']
+        # Nome da Loja (Dentro de readmore-component)
+        loja_el = box.locator('[data-cy="abrirQuestionarioLoja"] div')
+        info['Loja'] = (await loja_el.text_content()).strip() if await loja_el.count() > 0 else 'N/E'
+
+        # Mapeamento de campos baseados em <span><strong>Campo:</strong> Valor</span>
+        campos_mapeamento = {
+            'CNPJ': 'CNPJ:',
+            'Endereço': 'Endereço:',
+            'Período': 'Período:',
+            'Número do QT': 'Número do QT:',
+            'Número da Loja': 'Número da Loja:',
+            'Data da Visita': 'Data da Visita:',
+            'Situação': 'Situação:'
+        }
         
-        for campo in campos_strong:
+        for rotulo, prefixo in campos_mapeamento.items():
             try:
-                divisor = f"{campo}:"
-                # Seletor exato do modelo: span que contém um strong com o texto do campo
-                elemento = box.locator(f"span:has(strong:text-is('{divisor}'))")
+                # Seletor baseado na estrutura <span><strong>Campo:</strong> Valor</span>
+                elemento = box.locator(f"span:has(strong:text-is('{prefixo}'))")
                 if await elemento.count() > 0:
-                    texto_bruto = await elemento.first.text_content()
-                    info[campo] = self._limpar_prefixo(texto_bruto, divisor)
+                    texto_completo = await elemento.first.text_content()
+                    info[rotulo] = self._limpar_prefixo(texto_completo, prefixo)
                 else:
-                    info[campo] = 'N/E'
-            except:
-                info[campo] = 'Erro'
+                    # Tenta sem os dois pontos caso o HTML varie
+                    prefixo_simples = prefixo.replace(':', '')
+                    elemento_simples = box.locator(f"span:has(strong:text-is('{prefixo_simples}'))")
+                    if await elemento_simples.count() > 0:
+                        texto_completo = await elemento_simples.first.text_content()
+                        info[rotulo] = self._limpar_prefixo(texto_completo, prefixo_simples)
+                    else:
+                        info[rotulo] = 'N/E'
+            except Exception as e:
+                logger.debug(f"Falha ao extrair {rotulo}: {e}")
+                info[rotulo] = 'N/E'
 
-        # Loja via readmore-component
-        try:
-            loja_el = box.locator("readmore-component > div")
-            info['Loja'] = (await loja_el.text_content()).strip() if await loja_el.count() > 0 else 'N/E'
-        except:
-            info['Loja'] = 'Erro'
-
-        logger.info("Detalhes extraídos com sucesso!")
+        logger.info("Extração finalizada com sucesso!")
         return info
