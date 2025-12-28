@@ -3,3 +3,11 @@ venv/
 __pycache__/
 *.pyc
 .pytest_cache/
+
+# Arquivos de estado (gerenciados pelo KV Store do Kestra)
+ultimo_formulario.txt
+novo_formulario.json
+
+# Artefatos de debug
+*.png
+*.log
