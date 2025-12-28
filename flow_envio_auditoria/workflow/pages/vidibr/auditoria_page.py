@@ -64,13 +64,16 @@ class VidibrAuditoriaPage(BasePage):
         """Extrai detalhes do formulário usando seletores do modelo."""
         logger.info("Iniciando extração de detalhes...")
         
-        # Tenta expandir "Ver mais" antes de buscar o box
+        # Expande "Ver mais" para mostrar o nome completo da Loja
         try:
-            ver_mais = self.page.get_by_role("link", name="Ver mais")
+            # Seletor direto pelo texto do link
+            ver_mais = self.page.locator("a").filter(has_text="Ver mais")
             if await ver_mais.count() > 0:
+                logger.info("Clicando em 'Ver mais' para expandir detalhes...")
                 await ver_mais.first.click()
                 await asyncio.sleep(1)
-        except: pass
+        except Exception as e:
+            logger.debug(f"'Ver mais' não encontrado ou já expandido: {e}")
 
         # Aguarda o box carregar (WAIT_TIMEOUT = 15s como no modelo)
         box = self.page.locator(".box-pergunta").first
