@@ -1,4 +1,4 @@
-# Auto Kestra - Automações VIDIBR e Resultados
+# Auto Kestra - Automações
 
 Repositório central para automações de extração de dados e auditoria, orquestradas pelo **Kestra** e utilizando **Playwright** para web scraping.
 
@@ -6,7 +6,7 @@ Repositório central para automações de extração de dados e auditoria, orque
 
 O repositório está dividido em módulos independentes, cada um com sua própria lógica de workflow, páginas (POM) e scripts:
 
-- **`flow_envio_auditoria/`**: Automação integrada com o portal VIDIBR para monitoramento de auditorias e envio de notificações detalhadas via WhatsApp.
+- **`flow_envio_auditoria/`**: Automação integrada com o portal X para monitoramento de auditorias e envio de notificações detalhadas via WhatsApp.
 - **`flow_envio_resultados/`**: Extração de indicadores de desempenho (Loja) e envio de resumos de metas e resultados.
 
 ## 🛠️ Stack Tecnológica
@@ -19,7 +19,7 @@ O repositório está dividido em módulos independentes, cada um com sua própri
 
 ## 📂 Arquitetura (Page Object Model - POM)
 
-Todos os projetos seguem um padrão profissional de engenharia de software para facilitar a manutenção e estabilidade:
+Todos os projetos seguem um padrão de engenharia de software para facilitar a manutenção e estabilidade:
 
 ```text
 flow_X/
@@ -38,17 +38,17 @@ Para o funcionamento correto dos flows, as seguintes variáveis devem estar conf
 - `GITHUB_USER`: Seu usuário do GitHub.
 - `GITHUB_PASS`: Personal Access Token (PAT) para sincronização.
 
-### Auditoria VIDIBR
-- `VIDIBR_USER`: Usuário de acesso ao portal VIDIBR.
-- `VIDIBR_PASS`: Senha de acesso ao portal VIDIBR.
+### Auditoria
+- `VIDIBR_USER`: Usuário de acesso ao portal.
+- `VIDIBR_PASS`: Senha de acesso ao portal.
 - `ULTIMO_VIDIBR_FORM`: (Automático) Armazena o estado do último formulário processado.
 
 ### Notificações (Evolution API)
 - `EVOLUTION_API_URL`: URL base da sua API Evolution.
 - `EVOLUTION_API_KEY`: Chave de API da instância.
 - `EVOLUTION_INSTANCE`: Nome da instância conectada.
-- `WHATSAPP_GROUP_ID`: ID do grupo para auditoria.
-- `WHATSAPP_GROUP_LOJA`: ID do grupo para resultados.
+- `WHATSAPP_GROUP_*`: ID do grupo para auditoria.
+- `WHATSAPP_GROUP_*`: ID do grupo para resultados.
 
 ## 🔄 Sincronização
 
