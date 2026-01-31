@@ -30,9 +30,7 @@ class LoginPage(BasePage):
         logger.info("Preenchendo Email...")
         await self.preencher("#identifierId", email)
         
-        # Screenshot do passo 1 (Email preenchido)
-        await self.page.screenshot(path="step_google_email.png")
-        logger.info("Screenshot salvo: step_google_email.png")
+
 
         # Clicar em Avançar
         logger.info("Clicando em Avançar...")
@@ -47,9 +45,7 @@ class LoginPage(BasePage):
         logger.info("Preenchendo Senha...")
         await self.page.locator('input[name="Passwd"]').fill(senha)
 
-        # Screenshot do passo 2 (Senha preenchida)
-        await self.page.screenshot(path="step_google_senha.png")
-        logger.info("Screenshot salvo: step_google_senha.png")
+
 
         # Clicar em Avançar novamente
         logger.info("Clicando em Avançar (Login)...")

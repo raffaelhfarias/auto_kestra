@@ -1,4 +1,5 @@
 
+import csv
 import asyncio
 import logging
 import sys
@@ -14,6 +15,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".
 from workflow.components.navegador import Navegador
 from workflow.pages.base_page import BasePage
 from workflow.pages.loja.login_page import LoginPage
+from workflow.pages.loja.ranking_vendas_page import RankingVendasPage
 
 # Configuração de Logs
 logging.basicConfig(
@@ -29,8 +31,9 @@ async def run():
         # Inicializa o browser
         page = await navegador.setup_browser()
         
-        # Instancia a LoginPage (que herda de BasePage)
+        # Instancia as páginas
         login_page = LoginPage(page)
+        ranking_page = RankingVendasPage(page)
         
         # Navega para o link solicitado
         url = "https://sgi.e-boticario.com.br/Paginas/Acesso/Entrar.aspx?ReturnUrl=%2f"
@@ -48,19 +51,63 @@ async def run():
         else:
             logger.warning("Credenciais VD_USER ou VD_PASS não encontradas no .env!")
         
-        # Verifica o título para confirmar sucesso (opcional, pode mudar pós clique)
-        # As vezes o título muda ou redireciona
-        await page.wait_for_load_state("domcontentloaded")
+        # Aguarda login completar
+        await page.wait_for_load_state("networkidle")
         titulo = await page.title()
-        logger.info(f"Interação realizada! Título atual: {titulo}")
+        logger.info(f"Login realizado! Título atual: {titulo}")
 
-        # Tira um screenshot para evidência
-        screenshot_path = "passo_login_externo.png"
-        await page.screenshot(path=screenshot_path)
-        logger.info(f"Screenshot salvo em: {screenshot_path}")
+        # --- Fluxo de Ranking de Vendas ---
+        logger.info("Iniciando fluxo de filtros...")
+
+        configs = [
+            {"tipo": "VD", "estrutura": None},
+            {"tipo": "EUD", "estrutura": "22960"}
+        ]
+
+        for config in configs:
+            tipo = config["tipo"]
+            estrutura = config["estrutura"]
+            logger.info(f"--- Iniciando extração: {tipo} ---")
+        
+            # 1. Navegar (Garante limpar estado/filtros anteriores)
+            await ranking_page.navegar_para_ranking_vendas()
+            
+            # 2. Selecionar Datas (Faturamento)
+            await ranking_page.selecionar_datas_faturamento()
+            
+            # Preencher estrutura se houver (EUD)
+            if estrutura:
+                await ranking_page.preencher_estrutura(estrutura)
+            
+            # 3. Selecionar Ciclos
+            # Configurar conforme necessidade (Ex: "202602")
+            ciclo_inicial_val = "202602"
+            ciclo_final_val = "202602"
+            await ranking_page.selecionar_ciclos(ciclo_inicial_val, ciclo_final_val)
+            
+            # 4. Filtros adicionais (Situação Fiscal, Agrupamento) e Buscar
+            await ranking_page.preencher_filtros_adicionais()
+            await ranking_page.buscar()
+
+            # 4. Extrair e Salvar
+            dados = await ranking_page.extrair_tabela()
+            
+            # Define caminho do arquivo
+            caminho_csv = f"extracoes/resultado_filtros_{tipo}.csv"
+            os.makedirs(os.path.dirname(caminho_csv), exist_ok=True)
+            
+            with open(caminho_csv, mode="w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                writer.writerow(["Gerencia", "Valor Praticado"])
+                writer.writerows(dados)
+                
+            logger.info(f"Dados salvos em: {caminho_csv}")
+
+
 
     except Exception as e:
         logger.error(f"Ocorreu um erro durante a execução: {e}")
+
     finally:
         await navegador.stop_browser()
 
