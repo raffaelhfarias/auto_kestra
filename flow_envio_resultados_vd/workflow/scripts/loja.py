@@ -63,6 +63,17 @@ async def run():
         titulo = await page.title()
         logger.info(f"Login realizado! Título atual: {titulo}")
 
+        if "Confirme que é você" in titulo:
+             logger.warning("Tela de confirmação do Google detectada! Salvando HTML para debug...")
+             html_content = await page.content()
+             with open("debug_google_confirmation.html", "w", encoding="utf-8") as f:
+                 f.write(html_content)
+             logger.info("HTML salvo em: debug_google_confirmation.html")
+             # Pode ser útil tirar um screenshot também
+             await page.screenshot(path="debug_google_confirmation.png")
+             logger.info("Screenshot salvo em: debug_google_confirmation.png")
+
+
         # --- Fluxo de Ranking de Vendas ---
         logger.info("Iniciando fluxo de filtros...")
 
