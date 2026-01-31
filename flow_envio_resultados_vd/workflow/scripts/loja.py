@@ -47,14 +47,8 @@ async def run():
         senha = os.environ.get("VD_PASS")
         
         if email and senha:
-            # Gerar Token 2FA (Google Authenticator)
-            # Secret fornecido: zebn gkh6 mejn e3et wuu7 f5ep e2lk emkd
-            # Recomendável mover para variávei de ambiente VD_TOTP_SECRET posteriormente
-            import pyotp
-            secret = "zebngkh6mejne3etwuu7f5epe2lkemkd" 
-            token_2fa = pyotp.TOTP(secret).now()
-            
-            await login_page.realizar_login_google(email, senha, token_2fa)
+
+            await login_page.realizar_login_google(email, senha)
         else:
             logger.warning("Credenciais VD_USER ou VD_PASS não encontradas no .env!")
         

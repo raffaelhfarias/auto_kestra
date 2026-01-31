@@ -20,7 +20,7 @@ class LoginPage(BasePage):
             name=re.compile("entrar como colaborador", re.IGNORECASE)
         ).and_(self.page.locator("#GoogleExchange")).click()
 
-    async def realizar_login_google(self, email, senha, token_2fa=None):
+    async def realizar_login_google(self, email, senha):
         """
         Realiza o login no Google com os passos definidos e tira screenshots.
         """
@@ -50,6 +50,14 @@ class LoginPage(BasePage):
         # Clicar em Avançar novamente
         logger.info("Clicando em Avançar (Login)...")
         await self.page.get_by_role('button', name='Avançar').click()
+
+        # Aguardar navegação ou erro
+        # try:
+        #     await self.page.wait_for_load_state("networkidle", timeout=10000)
+        # except:
+        #     pass
+
+
 
 
 
