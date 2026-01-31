@@ -125,6 +125,19 @@ async def run():
 
     except Exception as e:
         logger.error(f"Ocorreu um erro durante a execução: {e}")
+        # Tenta tirar screenshot do erro se a página foi inicializada
+        if 'page' in locals():
+            try:
+                await page.screenshot(path="erro_execucao.png")
+                logger.info("Screenshot do erro salvo em: erro_execucao.png")
+                
+                # Salva também o HTML
+                html_error = await page.content()
+                with open("erro_execucao.html", "w", encoding="utf-8") as f:
+                    f.write(html_error)
+                logger.info("HTML do erro salvo em: erro_execucao.html")
+            except Exception as screenshot_err:
+                logger.error(f"Não foi possível salvar screenshot de erro: {screenshot_err}")
 
     finally:
         await navegador.stop_browser()
