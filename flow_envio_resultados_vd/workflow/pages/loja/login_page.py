@@ -65,6 +65,50 @@ class LoginPage(BasePage):
                 
                 # Clicar em Avançar no 2FA
                 await self.page.get_by_role('button', name='Avançar').click()
-            except Exception as e:
-                logger.warning(f"Não foi solicitado 2FA ou não foi possível preencher: {e}")
+            except Exception:
+                logger.info("Campo 2FA direto não encontrado. Verificando tela de desafio...")
+                
+                # Verifica se estamos na tela de "Escolha como fazer login" ou "Confirme que é você"
+                # O locator pode ser pelo texto de cabeçalho ou botões específicos
+                try:
+                    # Dá um tempo para a animação da tela de desafio carregar se for o caso
+                    await self.page.wait_for_timeout(2000)
+                    
+                    # Tenta encontrar a opção de Google Authenticator diretamente na lista
+                    # O texto pode variar: "Receber um código de verificação no app Google Authenticator"
+                    # Vamos buscar por algo genérico primeiro
+                    auth_option = self.page.get_by_text("Google Authenticator")
+                    
+                    if await auth_option.is_visible():
+                        logger.info("Opção 'Google Authenticator' encontrada. Clicando...")
+                        await auth_option.click()
+                    else:
+                        logger.info("Opção 'Google Authenticator' NÃO encontrada na lista inicial.")
+                        
+                        # Tenta clicar em "Tentar de outro jeito" se existir
+                        try_another = self.page.get_by_text("Tentar de outro jeito")
+                        if await try_another.is_visible():
+                            logger.info("Clicando em 'Tentar de outro jeito'...")
+                            await try_another.click()
+                            
+                            # Agora espera aparecer a opção
+                            logger.info("Aguardando opção 'Google Authenticator' aparecer...")
+                            await auth_option.wait_for(state="visible", timeout=5000)
+                            await auth_option.click()
+                        else:
+                            logger.warning("Botão 'Tentar de outro jeito' não encontrado.")
+
+                    # Após selecionar a opção, aguarda o campo aparecer novamente
+                    totp_input = self.page.locator('input[name="totpPin"]')
+                    await totp_input.wait_for(state="visible", timeout=10000)
+                    
+                    logger.info(f"Campo 2FA detectado após navegação. Inserindo token.")
+                    await totp_input.fill(token_2fa)
+                    
+                    # Clicar em Avançar no 2FA
+                    await self.page.get_by_role('button', name='Avançar').click()
+                    
+                except Exception as e_inner:
+                    logger.error(f"Falha ao tentar navegar pelo desafio de 2FA: {e_inner}")
+                    raise e_inner
 
