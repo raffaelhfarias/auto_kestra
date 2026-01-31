@@ -82,25 +82,7 @@ class LoginPage(BasePage):
                     if await auth_option.is_visible():
                         logger.info("Opção 'Google Authenticator' encontrada. Clicando...")
                         await auth_option.click()
-                    else:
-                        logger.info("Opção 'Google Authenticator' NÃO encontrada na lista inicial.")
-                        
-                        # Tenta clicar em "Tentar de outro jeito" se existir (ou variações)
-                        # Usando exact=True para evitar cliques acidentais em textos explicativos que contenham a frase
-                        try_another = self.page.get_by_text("Tentar de outro jeito", exact=True)
-                        if not await try_another.is_visible():
-                             try_another = self.page.get_by_text("Tentar de outra maneira", exact=True)
-                        
-                        if await try_another.is_visible():
-                            logger.info("Clicando em 'Tentar de outro jeito'...")
-                            await try_another.click()
-                            
-                            # Agora espera aparecer a opção
-                            logger.info("Aguardando opção 'Google Authenticator' aparecer...")
-                            await auth_option.wait_for(state="visible", timeout=5000)
-                            await auth_option.click()
-                        else:
-                            logger.warning("Botão 'Tentar de outro jeito' não encontrado.")
+
 
                     # Após selecionar a opção, aguarda o campo aparecer novamente
                     totp_input = self.page.locator('input[name="totpPin"]')
