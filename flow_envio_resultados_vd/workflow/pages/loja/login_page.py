@@ -51,50 +51,5 @@ class LoginPage(BasePage):
         logger.info("Clicando em Avançar (Login)...")
         await self.page.get_by_role('button', name='Avançar').click()
 
-        if token_2fa:
-            logger.info("Aguardando possível solicitação de 2FA...")
-            try:
-                # Tenta identificar o campo de TOTP. O seletor pode variar, mas geralmente é name="totpPin" ou id="totpPin"
-                # ou input[type="tel"]. Vamos tentar alguns comuns.
-                # Timeout curto pois pode não pedir 2FA
-                totp_input = self.page.locator('input[name="totpPin"]')
-                await totp_input.wait_for(state="visible", timeout=5000)
-                
-                logger.info(f"Campo 2FA detectado. Inserindo token: {token_2fa}")
-                await totp_input.fill(token_2fa)
-                
-                # Clicar em Avançar no 2FA
-                await self.page.get_by_role('button', name='Avançar').click()
-            except Exception:
-                logger.info("Campo 2FA direto não encontrado. Verificando tela de desafio...")
-                
-                # Verifica se estamos na tela de "Escolha como fazer login" ou "Confirme que é você"
-                # O locator pode ser pelo texto de cabeçalho ou botões específicos
-                try:
-                    # Dá um tempo para a animação da tela de desafio carregar se for o caso
-                    await self.page.wait_for_timeout(2000)
-                    
-                    # Tenta encontrar a opção de Google Authenticator diretamente na lista
-                    # O texto pode variar: "Receber um código de verificação no app Google Authenticator"
-                    # Vamos buscar por algo genérico primeiro
-                    auth_option = self.page.get_by_text("Google Authenticator")
-                    
-                    if await auth_option.is_visible():
-                        logger.info("Opção 'Google Authenticator' encontrada. Clicando...")
-                        await auth_option.click()
 
-
-                    # Após selecionar a opção, aguarda o campo aparecer novamente
-                    totp_input = self.page.locator('input[name="totpPin"]')
-                    await totp_input.wait_for(state="visible", timeout=10000)
-                    
-                    logger.info(f"Campo 2FA detectado após navegação. Inserindo token.")
-                    await totp_input.fill(token_2fa)
-                    
-                    # Clicar em Avançar no 2FA
-                    await self.page.get_by_role('button', name='Avançar').click()
-                    
-                except Exception as e_inner:
-                    logger.error(f"Falha ao tentar navegar pelo desafio de 2FA: {e_inner}")
-                    raise e_inner
 
