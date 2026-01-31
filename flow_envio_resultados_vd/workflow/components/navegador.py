@@ -4,7 +4,6 @@ Módulo para configuração do navegador Playwright com técnicas de evasão (St
 
 from playwright.async_api import async_playwright
 import logging
-import os
 
 logger = logging.getLogger(__name__)
 
@@ -41,9 +40,10 @@ class Navegador:
             headless=True,
             channel="chromium",
             args=args,
-            slow_mo=0
+            slow_mo=0 # Removido slow_mo para máxima performance dinâmica
         )
 
+        import os
         # Verifica se existe um arquivo de sessão (Storage State)
         script_dir = os.path.dirname(__file__)
         state_path = os.path.join(script_dir, "..", "..", "state.json")
@@ -105,6 +105,6 @@ class Navegador:
                 await self.browser.close()
             if self.playwright:
                 await self.playwright.stop()
-            logger.info("Browser fechado com sucesso.")
+            logger.info("Browser encerrado com sucesso.")
         except Exception as e:
-            logger.error(f"Erro ao fechar o browser: {e}")
+            logger.error(f"Erro ao fechar browser: {e}")
