@@ -40,8 +40,8 @@ async def run():
         await login_page.realizar_login_externo()
 
         # Realiza o login no Google
-        email = os.getenv("VD_USER")
-        senha = os.getenv("VD_PASS")
+        email = os.environ.get("VD_USER")
+        senha = os.environ.get("VD_PASS")
         
         if email and senha:
             await login_page.realizar_login_google(email, senha)
