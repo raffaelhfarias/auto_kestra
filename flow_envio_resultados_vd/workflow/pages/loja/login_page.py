@@ -73,13 +73,6 @@ class LoginPage(BasePage):
                 try:
                     # Dá um tempo para a animação da tela de desafio carregar se for o caso
                     await self.page.wait_for_timeout(2000)
-
-                    # Verifica se precisa clicar em "Tentar de outro jeito"
-                    try_another_way = self.page.get_by_text("Tentar de outro jeito")
-                    if await try_another_way.is_visible():
-                        logger.info("Botão 'Tentar de outro jeito' encontrado. Clicando...")
-                        await try_another_way.click()
-                        await self.page.wait_for_timeout(1000)
                     
                     # Tenta encontrar a opção de Google Authenticator diretamente na lista
                     # O texto pode variar: "Receber um código de verificação no app Google Authenticator"
