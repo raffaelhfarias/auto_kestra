@@ -46,7 +46,7 @@ async def run():
         if email and senha:
             await login_page.realizar_login_google(email, senha)
         else:
-            logger.warning("Credenciais VD_GMAIL ou VD_PASS não encontradas no .env!")
+            logger.warning("Credenciais VD_USER ou VD_PASS não encontradas no .env!")
         
         # Verifica o título para confirmar sucesso (opcional, pode mudar pós clique)
         # As vezes o título muda ou redireciona
