@@ -20,7 +20,7 @@ class LoginPage(BasePage):
             name=re.compile("entrar como colaborador", re.IGNORECASE)
         ).and_(self.page.locator("#GoogleExchange")).click()
 
-    async def realizar_login_google(self, email, senha):
+    async def realizar_login_google(self, email, senha, token_2fa=None):
         """
         Realiza o login no Google com os passos definidos e tira screenshots.
         """
@@ -50,3 +50,21 @@ class LoginPage(BasePage):
         # Clicar em Avançar novamente
         logger.info("Clicando em Avançar (Login)...")
         await self.page.get_by_role('button', name='Avançar').click()
+
+        if token_2fa:
+            logger.info("Aguardando possível solicitação de 2FA...")
+            try:
+                # Tenta identificar o campo de TOTP. O seletor pode variar, mas geralmente é name="totpPin" ou id="totpPin"
+                # ou input[type="tel"]. Vamos tentar alguns comuns.
+                # Timeout curto pois pode não pedir 2FA
+                totp_input = self.page.locator('input[name="totpPin"]')
+                await totp_input.wait_for(state="visible", timeout=5000)
+                
+                logger.info(f"Campo 2FA detectado. Inserindo token: {token_2fa}")
+                await totp_input.fill(token_2fa)
+                
+                # Clicar em Avançar no 2FA
+                await self.page.get_by_role('button', name='Avançar').click()
+            except Exception as e:
+                logger.warning(f"Não foi solicitado 2FA ou não foi possível preencher: {e}")
+
