@@ -39,15 +39,42 @@ async def run():
         url = "https://sgi.e-boticario.com.br/Paginas/Acesso/Entrar.aspx?ReturnUrl=%2f"
         await login_page.navegar(url)
         
-        # Verifica se já está logado (redirecionou para home ou não tem elementos de login)
+        # Aguarda um momento para possíveis redirecionamentos automáticos por cookie
+        logger.info("Aguardando redirecionamentos automáticos...")
+        await page.wait_for_timeout(5000)
+
+        # Verifica se já está logado
         estamos_logados = False
         try:
-             # Se redirecionou para uma URL que não é de login ou se tem elemento interno
-             if "Entrar.aspx" not in page.url and "account/login" not in page.url.lower():
+             current_url = page.url.lower()
+             title = await page.title()
+             logger.info(f"URL atual: {current_url}")
+             logger.info(f"Título atual: {title}")
+
+             # Se saiu da tela de login ou foi para uma tela de "Aguardar" ou Dashboard
+             if "entrar.aspx" not in current_url and "account/login" not in current_url:
                  estamos_logados = True
-                 logger.info("Já estamos logados! Pulando etapas de login...")
-        except:
-             pass
+                 logger.info("URL mudou (não é mais login). Assumindo logado.")
+             elif "aguardaracao" in current_url:
+                 estamos_logados = True
+                 logger.info("Redirecionado para AguardarAcao. Assumindo logado.")
+             
+             # Verifica presença de elementos da Home se ainda estiver na dúvida
+             # Exemplo: Menu "Força de Vendas"
+             if not estamos_logados:
+                 try:
+                    # Pequeno timeout para check rápido
+                    if await page.get_by_text("Força de Vendas").is_visible(timeout=2000):
+                        estamos_logados = True
+                        logger.info("Elemento 'Força de Vendas' encontrado. Estamos logados!")
+                 except:
+                    pass
+
+        except Exception as e:
+             logger.warning(f"Erro ao verificar estado de login: {e}")
+
+        if estamos_logados:
+             logger.info("Já estamos logados! Pulando etapas de login...")
 
         if not estamos_logados:
             # Realiza a interação de login
