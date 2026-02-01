@@ -3,7 +3,9 @@ Módulo para configuração do navegador Playwright com técnicas de evasão (St
 """
 
 from playwright.async_api import async_playwright
+
 import logging
+
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +45,6 @@ class Navegador:
             slow_mo=0 # Removido slow_mo para máxima performance dinâmica
         )
 
-        import os
         # Verifica se existe um arquivo de sessão (Storage State)
         script_dir = os.path.dirname(__file__)
         state_path = os.path.join(script_dir, "..", "..", "state.json")
