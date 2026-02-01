@@ -96,6 +96,17 @@ class Navegador:
         self.page = await self.context.new_page()
         return self.page
 
+    async def save_state(self):
+        """Salva o estado da sessão (cookies, localStorage) no arquivo state.json."""
+        try:
+            if self.context:
+                script_dir = os.path.dirname(__file__)
+                state_path = os.path.join(script_dir, "..", "..", "state.json")
+                await self.context.storage_state(path=state_path)
+                logger.info(f"Estado da sessão salvo em: {state_path}")
+        except Exception as e:
+            logger.error(f"Erro ao salvar estado da sessão: {e}")
+
     async def stop_browser(self):
         """Fecha o browser e limpa os recursos."""
         try:

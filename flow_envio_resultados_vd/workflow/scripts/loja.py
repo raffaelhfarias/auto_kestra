@@ -39,33 +39,46 @@ async def run():
         url = "https://sgi.e-boticario.com.br/Paginas/Acesso/Entrar.aspx?ReturnUrl=%2f"
         await login_page.navegar(url)
         
-        # Realiza a interação de login
-        await login_page.realizar_login_externo()
+        # Verifica se já está logado (redirecionou para home ou não tem elementos de login)
+        estamos_logados = False
+        try:
+             # Se redirecionou para uma URL que não é de login ou se tem elemento interno
+             if "Entrar.aspx" not in page.url and "account/login" not in page.url.lower():
+                 estamos_logados = True
+                 logger.info("Já estamos logados! Pulando etapas de login...")
+        except:
+             pass
 
-        # Realiza o login no Google
-        email = os.environ.get("VD_USER")
-        senha = os.environ.get("VD_PASS")
+        if not estamos_logados:
+            # Realiza a interação de login
+            await login_page.realizar_login_externo()
+
+            # Realiza o login no Google
+            email = os.environ.get("VD_USER")
+            senha = os.environ.get("VD_PASS")
+            
+            if email and senha:
+                await login_page.realizar_login_google(email, senha)
+            else:
+                logger.warning("Credenciais VD_USER ou VD_PASS não encontradas no .env!")
+            
+            # Aguarda login completar
+            await page.wait_for_load_state("networkidle")
+            titulo = await page.title()
+            logger.info(f"Login realizado! Título atual: {titulo}")
+
+            if "Confirme que é você" in titulo:
+                 logger.warning("Tela de confirmação do Google detectada! Salvando HTML para debug...")
+                 html_content = await page.content()
+                 with open("debug_google_confirmation.html", "w", encoding="utf-8") as f:
+                     f.write(html_content)
+                 logger.info("HTML salvo em: debug_google_confirmation.html")
+                 # Pode ser útil tirar um screenshot também
+                 await page.screenshot(path="debug_google_confirmation.png")
+                 logger.info("Screenshot salvo em: debug_google_confirmation.png")
         
-        if email and senha:
-
-            await login_page.realizar_login_google(email, senha)
-        else:
-            logger.warning("Credenciais VD_USER ou VD_PASS não encontradas no .env!")
-        
-        # Aguarda login completar
-        await page.wait_for_load_state("networkidle")
-        titulo = await page.title()
-        logger.info(f"Login realizado! Título atual: {titulo}")
-
-        if "Confirme que é você" in titulo:
-             logger.warning("Tela de confirmação do Google detectada! Salvando HTML para debug...")
-             html_content = await page.content()
-             with open("debug_google_confirmation.html", "w", encoding="utf-8") as f:
-                 f.write(html_content)
-             logger.info("HTML salvo em: debug_google_confirmation.html")
-             # Pode ser útil tirar um screenshot também
-             await page.screenshot(path="debug_google_confirmation.png")
-             logger.info("Screenshot salvo em: debug_google_confirmation.png")
+        # Salva o estado da sessão (cookies novos ou renovados)
+        await navegador.save_state()
 
 
         # --- Fluxo de Ranking de Vendas ---
