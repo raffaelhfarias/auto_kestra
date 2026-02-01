@@ -61,3 +61,11 @@ class LoginPage(BasePage):
 
 
 
+    async def is_login_button_visible(self):
+        """
+        Verifica se o botão de Login Externo está visível na página.
+        """
+        try:
+            return await self.page.locator("#btnLoginExterno").is_visible(timeout=3000)
+        except:
+            return False

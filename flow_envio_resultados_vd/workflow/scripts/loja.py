@@ -58,13 +58,21 @@ async def run():
              elif "aguardaracao" in current_url:
                  estamos_logados = True
                  logger.info("Redirecionado para AguardarAcao. Assumindo logado.")
+             else:
+                 # URL ainda parece ser de login, mas pode ser um falso negativo (estado restaurado)
+                 logger.info("URL ainda é de login. Verificando se botão de login está visível...")
+                 botao_login_visivel = await login_page.is_login_button_visible()
+                 if not botao_login_visivel:
+                     estamos_logados = True
+                     logger.info("Botão de login NÃO está visível. Assumindo que sessão foi restaurada com sucesso!")
+
              
              # Verifica presença de elementos da Home se ainda estiver na dúvida
              # Exemplo: Menu "Força de Vendas"
              if not estamos_logados:
                  try:
                     # Pequeno timeout para check rápido
-                    if await page.get_by_text("Força de Vendas").is_visible(timeout=2000):
+                    if await page.get_by_text("Força de Vendas").is_visible(timeout=5000):
                         estamos_logados = True
                         logger.info("Elemento 'Força de Vendas' encontrado. Estamos logados!")
                  except:
