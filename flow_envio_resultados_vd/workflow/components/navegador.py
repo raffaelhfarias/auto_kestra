@@ -26,7 +26,7 @@ class Navegador:
 
         # Argumentos críticos para estabilidade e evasão
         args = [
-            "--headless=new",
+            #"--headless=new",
             "--disable-features=IsolateOrigins,site-per-process",
             "--disable-blink-features=AutomationControlled",
             "--no-sandbox",
@@ -40,7 +40,7 @@ class Navegador:
         ]
 
         self.browser = await self.playwright.chromium.launch(
-            headless=True,
+            headless=False,
             channel="chromium",
             args=args,
             slow_mo=0 # Removido slow_mo para máxima performance dinâmica
@@ -95,6 +95,11 @@ class Navegador:
 
         self.page = await self.context.new_page()
         return self.page
+
+    def update_page(self, new_page):
+        """Atualiza a referência da página quando uma nova aba é aberta."""
+        self.page = new_page
+        logger.info("Referência da página atualizada no navegador.")
 
     async def save_state(self):
         """Salva o estado da sessão (cookies, localStorage) no arquivo state.json."""

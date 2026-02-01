@@ -86,34 +86,70 @@ async def run():
 
         if not estamos_logados:
             # Realiza a interação de login
-            await login_page.realizar_login_externo()
-
-            # Realiza o login no Google
-            email = os.environ.get("VD_USER")
-            senha = os.environ.get("VD_PASS")
+            nova_pagina = await login_page.realizar_login_externo()
             
-            if email and senha:
-                await login_page.realizar_login_google(email, senha)
-            else:
-                logger.warning("Credenciais VD_USER ou VD_PASS não encontradas no .env!")
-            
-            # Aguarda login completar
-            await page.wait_for_load_state("networkidle")
-            titulo = await page.title()
-            logger.info(f"Login realizado! Título atual: {titulo}")
+            # Se uma nova aba foi aberta, atualiza todas as referências de página
+            if nova_pagina:
+                page = nova_pagina
+                navegador.update_page(page)  # Atualiza também no navegador
+                login_page.page = page
+                ranking_page.page = page
+                logger.info("Todas as páginas atualizadas para a nova aba.")
 
-            if "Confirme que é você" in titulo:
-                 logger.warning("Tela de confirmação do Google detectada! Salvando HTML para debug...")
-                 html_content = await page.content()
-                 with open("debug_google_confirmation.html", "w", encoding="utf-8") as f:
-                     f.write(html_content)
-                 logger.info("HTML salvo em: debug_google_confirmation.html")
-                 # Pode ser útil tirar um screenshot também
-                 await page.screenshot(path="debug_google_confirmation.png")
-                 logger.info("Screenshot salvo em: debug_google_confirmation.png")
+            # --- RE-VERIFICAÇÃO DE LOGIN ---
+            # Muitas vezes, ao clicar em Login Externo, se o cookie existe, o redirecionamento acontece
+            # sem pedir senha do Google novamente. Vamos aguardar e checar.
+            logger.info("Login externo acionado. Aguardando possíveis redirecionamentos (SSO)...")
+            await page.wait_for_timeout(5000)
+
+            current_url = page.url.lower()
+            if "aguardaracao" in current_url or ("entrar.aspx" not in current_url and "account/login" not in current_url):
+                 logger.info(f"Redirecionamento detectado após Login Externo (URL: {current_url}). Ppulando login Google.")
+                 estamos_logados = True
+            
+            if not estamos_logados:
+                # Realiza o login no Google apenas se AINDA não estivermos logados
+
+                email = os.environ.get("VD_USER")
+                senha = os.environ.get("VD_PASS")
+                
+                if email and senha:
+                    await login_page.realizar_login_google(email, senha)
+                else:
+                    logger.warning("Credenciais VD_USER ou VD_PASS não encontradas no .env!")
+                
+                # Aguarda login completar
+                await page.wait_for_load_state("networkidle")
+                titulo = await page.title()
+                logger.info(f"Login realizado! Título atual: {titulo}")
+
+                if "Confirme que é você" in titulo:
+                     logger.warning("Tela de confirmação do Google detectada! Salvando HTML para debug...")
+                     html_content = await page.content()
+                     with open("debug_google_confirmation.html", "w", encoding="utf-8") as f:
+                         f.write(html_content)
+                     logger.info("HTML salvo em: debug_google_confirmation.html")
+                     # Pode ser útil tirar um screenshot também
+                     await page.screenshot(path="debug_google_confirmation.png")
+                     logger.info("Screenshot salvo em: debug_google_confirmation.png")
         
-        # Salva o estado da sessão (cookies novos ou renovados)
-        await navegador.save_state()
+        # O estado da sessão será salvo no bloco finally para garantir que seja salvo mesmo em caso de erro
+
+        # --- TRATAMENTO AGUARDAR AÇÃO ---
+        # Se estivermos na página de AguardarAcao, devemos esperar ela sair.
+        # Geralmente ela redireciona para Default.aspx ou Inicializacao/Default.aspx
+        if "aguardaracao" in page.url.lower():
+            logger.info("Detectado página AguardarAcao. Aguardando redirecionamento final...")
+            try:
+                # O redirecionamento de URL pode demorar ou não acontecer (ficar na mesma URL base).
+                # O mais seguro é esperar pelo carregamento do Menu Principal (ex: Força de Vendas)
+                # Selector: #menu-cod-4 (Força de Vendas) ou #profile-menu (Perfil do usuário)
+                logger.info("Aguardando carregamento do Dashboard (Menu)...")
+                await page.wait_for_selector("#menu-cod-4", state="visible", timeout=60000)
+                logger.info("Dashboard carregado! Prosseguindo.")
+            except Exception as e:
+                logger.warning(f"Timeout aguardando Dashboard/Menu. Pode ser que falhe a seguir. Erro: {e}")
+
 
 
         # --- Fluxo de Ranking de Vendas ---
@@ -182,6 +218,12 @@ async def run():
                 logger.error(f"Não foi possível salvar screenshot de erro: {screenshot_err}")
 
     finally:
+        # Sempre salva o estado da sessão antes de fechar
+        try:
+            await navegador.save_state()
+        except Exception as save_err:
+            logger.warning(f"Erro ao salvar estado da sessão: {save_err}")
+        
         await navegador.stop_browser()
 
 if __name__ == "__main__":

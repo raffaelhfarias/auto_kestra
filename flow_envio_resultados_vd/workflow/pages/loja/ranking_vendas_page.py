@@ -6,30 +6,7 @@ logger = logging.getLogger(__name__)
 
 class RankingVendasPage(BasePage):
     
-    def obter_ano_ciclo(self, ciclo: int) -> int:
-        """Determina o ano correto para o ciclo fornecido."""
-        now = datetime.datetime.now()
-        ano_atual = now.year
-        mes_atual = now.month
-
-        # Ciclo 1 pertence ao próximo ano em dezembro
-        if ciclo == 1 and mes_atual == 12:
-            return ano_atual + 1
-
-        # Ciclo 17 pertence ao ano atual em dezembro
-        if ciclo == 17 and mes_atual == 12:
-            return ano_atual
-
-        # Ciclo 1 pertence ao ano atual em janeiro
-        if ciclo == 1 and mes_atual == 1:
-            return ano_atual
-
-        # Ciclo 17 pertence ao ano anterior em janeiro
-        if ciclo == 17 and mes_atual == 1:
-            return ano_atual - 1
-
-        # Caso padrão: retorna o ano atual
-        return ano_atual
+    # Método obter_ano_ciclo removido pois não estava sendo utilizado.
 
     async def navegar_para_ranking_vendas(self):
         """Navega pelo menu até a página de Ranking de Vendas."""
@@ -98,19 +75,34 @@ class RankingVendasPage(BasePage):
         await self.page.get_by_role('link', name='Pesquisar').click()
         await self.aguardar_loader_flexivel()
 
-    async def aguardar_loader_flexivel(self):
-        """Aguarda loader .sgi-loading ou #UpdateProgress1."""
+    async def aguardar_loader_flexivel(self, timeout: int = 60000):
+        """
+        Aguarda o loader #UpdateProgress1 ficar oculto.
+        O elemento muda de display:none para display:block quando está carregando.
+        """
+        logger.info("Aguardando carregamento (loader)...")
         try:
-           # Wait until #UpdateProgress1 has aria-hidden='true' or is detached
-           # Sometimes checking for the loading element state specifically is better
-           # Se o loader for visivel (display block ou similar), esperamos ele sumir.
-           # O user não especificou o loader, mantendo lógica anterior mas protegendo.
-           
-           # Opção simples: pause fixo ou wait for state hidden
-           # await self.page.wait_for_selector("#UpdateProgress1", state="hidden", timeout=30000)
-           pass
-        except Exception:
-             logger.info("Loader wait timed out or not found, proceeding.")
+            loader = self.page.locator("#UpdateProgress1")
+            
+            # Primeiro, verifica se o loader aparece (display != none)
+            # Aguarda um curto período para verificar se ele apareceu
+            await self.page.wait_for_timeout(500)
+            
+            # Aguarda até que o loader tenha display:none ou aria-hidden=true
+            # Usamos uma função de espera customizada
+            await self.page.wait_for_function(
+                """() => {
+                    const loader = document.querySelector('#UpdateProgress1');
+                    if (!loader) return true; // Se não existe, prossegue
+                    const style = window.getComputedStyle(loader);
+                    return style.display === 'none' || loader.getAttribute('aria-hidden') === 'true';
+                }""",
+                timeout=timeout
+            )
+            logger.info("Carregamento concluído!")
+            
+        except Exception as e:
+            logger.warning(f"Timeout ou erro ao aguardar loader: {e}. Prosseguindo...")
 
     async def extrair_tabela(self):
         """Extrai dados da tabela de Ranking de Vendas."""
@@ -118,37 +110,49 @@ class RankingVendasPage(BasePage):
         
         resultados = []
         try:
-            # Aguarda tabela aparecer
+            # Verifica se apareceu a mensagem de "Nenhum registro" RAPIDAMENTE
+            # O seletor pode variar, mas geralmente é uma div ou span com o texto
+            # Vamos arriscar um check no body text ou um seletor comum de grid vazio se houver
+            # Na dúvida, usamos o wait com Promise.race se fosse JS, aqui fazemos checks sequenciais com timeout curto para o negativo
+            
+            # Tenta verificar mensagem de vazio primeiro (timeout curto)
+            if await self.page.get_by_text("Nenhum registro", exact=False).is_visible(timeout=2000):
+                logger.info("Mensagem de 'Nenhum registro' detectada. Retornando lista vazia.")
+                return []
+
+            # Aguarda tabela aparecer (se não estava vazio, deve aparecer a tabela)
             tabela = self.page.locator("#ContentPlaceHolder1_grdRankingVendas")
-            await tabela.wait_for(state="visible", timeout=15000)
-            
-            # Itera sobre as linhas
-            linhas = await tabela.locator("tr").all()
-            
-            for linha in linhas:
-                # Células com classe grid_celula
-                tds = await linha.locator("td.grid_celula").all()
-                if len(tds) >= 5:
-                    gerencia = await tds[0].inner_text()
-                    valor_praticado = await tds[4].inner_text()
-                    
-                    gerencia = gerencia.strip()
-                    valor_praticado = valor_praticado.strip()
-                    
-                    # Tratamento numérico (pt-BR para float)
-                    # Ex: 1.234,56 -> 1234.56
-                    valor_limpo = valor_praticado.replace('.', '').replace(',', '.')
-                    
-                    try:
-                        valor_float = float(valor_limpo)
-                    except ValueError:
-                        valor_float = 0.0
-                        logger.warning(f"Falha ao converter valor: {valor_praticado} (Gerencia: {gerencia})")
-                    
-                    resultados.append([gerencia, valor_float])
-                    
-            logger.info(f"Extraídos {len(resultados)} registros.")
-            return resultados
+            if await tabela.is_visible(timeout=5000): # Reduzido timeout pois já testamos o vazio
+                # Itera sobre as linhas
+                linhas = await tabela.locator("tr").all()
+                
+                for linha in linhas:
+                    # Células com classe grid_celula
+                    tds = await linha.locator("td.grid_celula").all()
+                    if len(tds) >= 5:
+                        gerencia = await tds[0].inner_text()
+                        valor_praticado = await tds[4].inner_text()
+                        
+                        gerencia = gerencia.strip()
+                        valor_praticado = valor_praticado.strip()
+                        
+                        # Tratamento numérico (pt-BR para float)
+                        # Ex: 1.234,56 -> 1234.56
+                        valor_limpo = valor_praticado.replace('.', '').replace(',', '.')
+                        
+                        try:
+                            valor_float = float(valor_limpo)
+                        except ValueError:
+                            valor_float = 0.0
+                            logger.warning(f"Falha ao converter valor: {valor_praticado} (Gerencia: {gerencia})")
+                        
+                        resultados.append([gerencia, valor_float])
+                        
+                logger.info(f"Extraídos {len(resultados)} registros.")
+                return resultados
+            else:
+                logger.warning("Tabela não apareceu e nem mensagem de vazio. Verifique se houve erro no carregamento.")
+                return []
             
         except Exception as e:
             logger.error(f"Erro na extração da tabela: {e}")
