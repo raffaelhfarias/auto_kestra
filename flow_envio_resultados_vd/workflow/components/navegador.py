@@ -5,6 +5,7 @@ Módulo para configuração do navegador Playwright com técnicas de evasão (St
 from playwright.async_api import async_playwright
 
 import logging
+import os
 
 
 logger = logging.getLogger(__name__)
