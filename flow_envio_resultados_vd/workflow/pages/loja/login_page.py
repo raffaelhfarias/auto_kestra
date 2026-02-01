@@ -45,8 +45,6 @@ class LoginPage(BasePage):
         logger.info("Preenchendo Senha...")
         await self.page.locator('input[name="Passwd"]').fill(senha)
 
-
-
         # Clicar em Avançar novamente
         logger.info("Clicando em Avançar (Login)...")
         await self.page.get_by_role('button', name='Avançar').click()
@@ -56,10 +54,6 @@ class LoginPage(BasePage):
         #     await self.page.wait_for_load_state("networkidle", timeout=10000)
         # except:
         #     pass
-
-
-
-
 
     async def is_login_button_visible(self):
         """
