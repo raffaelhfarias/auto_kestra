@@ -1,8 +1,10 @@
 import os
 import sys
 import json
-import requests
+import csv
+import glob
 import logging
+import requests
 from dotenv import load_dotenv
 
 # Configuração de Logging
@@ -11,65 +13,135 @@ logger = logging.getLogger("NotificarWhatsApp")
 
 load_dotenv()
 
-# Configurações da Evolution API vindas do env (Kestra KV Store)
+# Configurações da Evolution API
 EVOLUTION_API_URL = os.environ.get("EVOLUTION_API_URL")
 EVOLUTION_API_KEY = os.environ.get("EVOLUTION_API_KEY")
 EVOLUTION_INSTANCE = os.environ.get("EVOLUTION_INSTANCE")
 WHATSAPP_GROUP_VD = os.environ.get("WHATSAPP_GROUP_VD")
-VD_META = float(os.environ.get("VD_META", 0.0)) # 0.0 indica que não há meta definida
+
+# Metas Específicas por Ciclo (JSON)
+# Exemplo env: VD_METAS_JSON='{"VD_202602": 150000, "EUD_202602": 50000}'
+VD_METAS_JSON_STR = os.environ.get("VD_METAS_JSON", "{}")
+try:
+    VD_METAS_DICT = json.loads(VD_METAS_JSON_STR)
+except Exception as e:
+    logger.warning(f"Erro ao fazer parse de VD_METAS_JSON: {e}. Nenhuma meta será aplicada.")
+    VD_METAS_DICT = {}
+
+def get_meta(tipo, ciclo):
+    """Retorna a meta específica buscando pela chave 'TIPO_CICLO' (ex: VD_202602)."""
+    chave = f"{tipo}_{ciclo}"
+    
+    # Busca exata: VD_202602
+    meta = VD_METAS_DICT.get(chave)
+    
+    if meta is not None:
+        logger.info(f"Meta encontrada para {chave}: {meta}")
+        return float(meta)
+    
+    logger.info(f"Nenhuma meta definida para {chave}.")
+    return 0.0
+
+def listar_arquivos_extracao():
+    """Encontra todos os CSVs de extração no diretório 'extracoes/' ou raiz."""
+    # Tenta padrão na pasta extracoes ou raiz
+    padroes = ["extracoes/resultado_filtros_*.csv", "resultado_filtros_*.csv"]
+    arquivos = []
+    for p in padroes:
+        arquivos.extend(glob.glob(p))
+    return list(set(arquivos)) # Remove duplicatas
 
 def formatar_valor(valor):
     """Formata valor para o padrão brasileiro: R$ 1.234,56"""
-    # Formata com separador de milhar e decimal
-    v = f"{valor:,.2f}"
-    # Troca , por X, . por , e X por .
+    try:
+        val_float = float(str(valor).replace("R$", "").replace(".", "").replace(",", ".").strip())
+    except:
+        val_float = 0.0
+        
+    v = f"{val_float:,.2f}"
     return f"R$ {v.replace(',', 'X').replace('.', ',').replace('X', '.')}"
 
-def formatar_mensagem(dados):
-    """Cria uma mensagem elegante seguindo o template do usuário."""
-    logger.info(f"Iniciando formatação da mensagem para {len(dados)} registros...")
-    msg = ["➡️ *Parcial Receita VD*", ""]
+def extrair_metadados_arquivo(filename):
+    """Extrai Tipo e Ciclo do nome do arquivo (ex: resultado_filtros_VD_202602.csv)."""
+    base = os.path.basename(filename).replace(".csv", "")
+    partes = base.split("_")
+    # Esperado: ['resultado', 'filtros', 'TIPO', 'CICLO']
+    if len(partes) >= 4:
+        tipo = partes[2]
+        ciclo = partes[3]
+        return tipo, ciclo
+    return "DESCONHECIDO", "N/A"
+
+def processar_arquivo_e_enviar(caminho_arquivo):
+    """Lê um CSV, formata a mensagem e envia."""
+    logger.info(f"Processando arquivo: {caminho_arquivo}")
     
-    realizado = 0
-    for item in dados:
-        loja = item.get("loja", "N/A")
-        gmv = item.get("gmv", 0)
-        realizado += gmv
-        msg.append(f" {loja}: {formatar_valor(gmv)}")
+    tipo, ciclo = extrair_metadados_arquivo(caminho_arquivo)
+    
+    dados_lojas = []
+    total_realizado = 0.0
+    
+    try:
+        with open(caminho_arquivo, mode="r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                gerencia = row.get("Gerencia", "N/A")
+                valor_str = row.get("Valor Praticado", "0")
+                
+                # Limpeza básica do valor para soma
+                try:
+                    valor_float = float(valor_str.replace("R$", "").replace(".", "").replace(",", ".").strip())
+                except:
+                    valor_float = 0.0
+                
+                total_realizado += valor_float
+                dados_lojas.append({"loja": gerencia, "valor": valor_float})
+                
+    except Exception as e:
+        logger.error(f"Erro ao ler arquivo {caminho_arquivo}: {e}")
+        return
+
+    # Se não houver dados, pula
+    if not dados_lojas:
+        logger.warning(f"Arquivo vazio ou sem dados válidos: {caminho_arquivo}")
+        return
+
+    # Monta Mensagem
+    msg = [f"➡️ *Parcial Receita {tipo} - Ciclo {ciclo}*", ""]
+    
+    for item in dados_lojas:
+        msg.append(f" {item['loja']}: {formatar_valor(item['valor'])}")
     
     msg.append("")
     
-    if VD_META > 0:
-        logger.info(f"Meta detectada: R$ {VD_META:,.2f}. Calculando indicadores...")
-        msg.append(f"🎯 *Meta*: {formatar_valor(VD_META)}")
-        msg.append(f"💰 *Realizado*: {formatar_valor(realizado)}")
+    # Busca meta dinâmica (VD ou EUD)
+    META_ATUAL = get_meta(tipo, ciclo)
+    
+    if META_ATUAL > 0:
+        logger.info(f"Calculando meta para {tipo} (Ciclo {ciclo})...")
+        diff = total_realizado - META_ATUAL
+        msg.append(f"🎯 *Meta*: {formatar_valor(META_ATUAL)}")
+        msg.append(f"💰 *Realizado*: {formatar_valor(total_realizado)}")
         
-        diferenca = realizado - VD_META
-        
-        if diferenca < 0:
-            msg.append(f"🔴 *Faltante*: {formatar_valor(diferenca)}")
-            logger.info(f"Status: Faltante de R$ {abs(diferenca):,.2f}")
+        if diff < 0:
+            msg.append(f"🔴 *Faltante*: {formatar_valor(abs(diff))}")
         else:
-            msg.append(f"🎉 *Ultrapassou*: {formatar_valor(diferenca)}")
-            logger.info("Status: Meta batida/ultrapassada!")
+            msg.append(f"🎉 *Superavit*: {formatar_valor(diff)}")
     else:
-        logger.info("Nenhuma meta definida (VD_META=0). Exibindo apenas realizado.")
-        msg.append(f"💰 *Realizado*: {formatar_valor(realizado)}")
-    
-    return "\n".join(msg)
+         msg.append(f"💰 *Total*: {formatar_valor(total_realizado)}")
 
-def enviar_whatsapp(dados_loja):
-    logger.info(f"Preparando envio para Evolution API (Instância: {EVOLUTION_INSTANCE})...")
+    texto_final = "\n".join(msg)
     
+    # Envia
+    enviar_para_whatsapp(texto_final)
+
+def enviar_para_whatsapp(mensagem):
     if not EVOLUTION_API_URL or not EVOLUTION_API_KEY:
-        logger.error("ERRO: Credenciais da Evolution API (URL ou API_KEY) ausentes no ambiente.")
+        logger.warning("Credenciais Evolution API não configuradas. Apenas logando mensagem.")
+        logger.info(mensagem)
         return
 
-    texto_formatado = formatar_mensagem(dados_loja)
-    
-    # Endpoint da Evolution API para envio de texto
     url = f"{EVOLUTION_API_URL}/message/sendText/{EVOLUTION_INSTANCE}"
-    logger.info(f"Destino da mensagem: {WHATSAPP_GROUP_VD}")
     
     headers = {
         "Content-Type": "application/json",
@@ -78,38 +150,33 @@ def enviar_whatsapp(dados_loja):
     
     payload = {
         "number": WHATSAPP_GROUP_VD,
-        "text": texto_formatado,
-        "delay": 1200,
+        "text": mensagem,
+        "delay": 2000,
         "linkPreview": False
     }
-
+    
     try:
-        logger.info("Enviando requisição POST para Evolution API...")
+        logger.info(f"Enviando mensagem para {WHATSAPP_GROUP_VD}...")
         response = requests.post(url, json=payload, headers=headers)
         response.raise_for_status()
-        logger.info(f"NOTIFICAÇÃO ENVIADA! Status Code: {response.status_code}")
-        return response.json()
+        logger.info(f"Sucesso! Status: {response.status_code}")
     except Exception as e:
-        logger.error(f"FALHA NO ENVIO: {e}")
-        if hasattr(e, 'response') and e.response:
-            logger.error(f"Resposta bruta da API: {e.response.text}")
-        raise e
+        logger.error(f"Erro ao enviar WhatsApp: {e}")
 
 if __name__ == "__main__":
-    logger.info("--- Iniciando Script de Notificação WhatsApp (VD) ---")
-    path_arquivo = os.environ.get("DADOS_ARQUIVO")
+    logger.info("--- Iniciando Processador de Notificações (Multi-Ciclo) ---")
     
-    if path_arquivo and os.path.exists(path_arquivo):
-        try:
-            logger.info(f"Lendo dados do arquivo: {path_arquivo}")
-            with open(path_arquivo, "r", encoding="utf-8") as f:
-                dados = json.load(f)
-            enviar_whatsapp(dados)
-        except Exception as e:
-            logger.error(f"Erro ao processar arquivo JSON: {e}", exc_info=True)
-            sys.exit(1)
+    arquivos = listar_arquivos_extracao()
+    
+    if not arquivos:
+        logger.warning("Nenhum arquivo CSV encontrado em 'extracoes/' ou raiz!")
     else:
-        logger.error(f"Arquivo de entrada não encontrado ou vazio: {path_arquivo}")
-        sys.exit(1)
-    
-    logger.info("--- Notificação Finalizada ---")
+        logger.info(f"Encontrados {len(arquivos)} arquivos para processar: {arquivos}")
+        
+        # Ordena para enviar em ordem lógica (ex: VD antes de EUD, ou por ciclo)
+        arquivos.sort() 
+        
+        for arq in arquivos:
+            processar_arquivo_e_enviar(arq)
+            
+    logger.info("--- Fim do Processamento ---")
