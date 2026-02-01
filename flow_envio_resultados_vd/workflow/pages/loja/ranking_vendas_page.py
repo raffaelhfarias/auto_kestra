@@ -110,14 +110,29 @@ class RankingVendasPage(BasePage):
         
         resultados = []
         try:
-            # Verifica se apareceu a mensagem de "Nenhum registro" RAPIDAMENTE
-            # O seletor pode variar, mas geralmente é uma div ou span com o texto
-            # Vamos arriscar um check no body text ou um seletor comum de grid vazio se houver
-            # Na dúvida, usamos o wait com Promise.race se fosse JS, aqui fazemos checks sequenciais com timeout curto para o negativo
-            
-            # Tenta verificar mensagem de vazio primeiro (timeout curto)
+            # 1. Verifica se apareceu o POP-UP de "Nenhum registro encontrado"
+            # O modal tem id="mensagemPanel" e o botão OK tem id="popupOkButton"
+            if await self.page.locator("#mensagemPanel").is_visible(timeout=3000):
+                logger.info("Pop-up de alerta detectado.")
+                try:
+                    # Tenta ler a mensagem para logar
+                    msg = await self.extrair_texto("#mensagemLabel", timeout=1000)
+                    logger.info(f"Mensagem do alerta: '{msg}'")
+                    
+                    # Clica em OK
+                    logger.info("Clicando em OK no pop-up...")
+                    await self.clicar("#popupOkButton")
+                    
+                    # Aguarda modal fechar para garantir que a interface está limpa
+                    await self.page.locator("#mensagemPanel").wait_for(state="hidden", timeout=5000)
+                    
+                    return [] # Retorna vazio pois não há registros
+                except Exception as e_modal:
+                    logger.warning(f"Erro ao tratar pop-up: {e_modal}")
+
+            # 2. Tenta verificar mensagem de texto solta (legacy ou outra forma de aviso)
             if await self.page.get_by_text("Nenhum registro", exact=False).is_visible(timeout=2000):
-                logger.info("Mensagem de 'Nenhum registro' detectada. Retornando lista vazia.")
+                logger.info("Mensagem de 'Nenhum registro' detectada na página. Retornando lista vazia.")
                 return []
 
             # Aguarda tabela aparecer (se não estava vazio, deve aparecer a tabela)

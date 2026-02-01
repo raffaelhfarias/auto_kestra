@@ -155,49 +155,59 @@ async def run():
         # --- Fluxo de Ranking de Vendas ---
         logger.info("Iniciando fluxo de filtros...")
 
-        configs = [
+        # Configuração de Ciclos via Variável de Ambiente
+        # Formato: "202602" para um ciclo ou "202602,202603" para múltiplos ciclos
+        ciclos_env = os.environ.get("VD_CICLOS", "202602")  # Default: ciclo atual
+        ciclos_lista = [c.strip() for c in ciclos_env.split(",")]
+        logger.info(f"Ciclos configurados para extração: {ciclos_lista}")
+
+        # Configuração base de extração (VD e EUD)
+        configs_base = [
             {"tipo": "VD", "estrutura": None},
             {"tipo": "EUD", "estrutura": "22960"}
         ]
 
-        for config in configs:
-            tipo = config["tipo"]
-            estrutura = config["estrutura"]
-            logger.info(f"--- Iniciando extração: {tipo} ---")
-        
-            # 1. Navegar (Garante limpar estado/filtros anteriores)
-            await ranking_page.navegar_para_ranking_vendas()
+        # Loop por cada ciclo configurado
+        for ciclo in ciclos_lista:
+            logger.info(f"========== PROCESSANDO CICLO: {ciclo} ==========")
             
-            # 2. Selecionar Datas (Faturamento)
-            await ranking_page.selecionar_datas_faturamento()
+            for config in configs_base:
+                tipo = config["tipo"]
+                estrutura = config["estrutura"]
+                logger.info(f"--- Iniciando extração: {tipo} (Ciclo: {ciclo}) ---")
             
-            # Preencher estrutura se houver (EUD)
-            if estrutura:
-                await ranking_page.preencher_estrutura(estrutura)
-            
-            # 3. Selecionar Ciclos
-            # Configurar conforme necessidade (Ex: "202602")
-            ciclo_inicial_val = "202602"
-            ciclo_final_val = "202602"
-            await ranking_page.selecionar_ciclos(ciclo_inicial_val, ciclo_final_val)
-            
-            # 4. Filtros adicionais (Situação Fiscal, Agrupamento) e Buscar
-            await ranking_page.preencher_filtros_adicionais()
-            await ranking_page.buscar()
-
-            # 4. Extrair e Salvar
-            dados = await ranking_page.extrair_tabela()
-            
-            # Define caminho do arquivo
-            caminho_csv = f"extracoes/resultado_filtros_{tipo}.csv"
-            os.makedirs(os.path.dirname(caminho_csv), exist_ok=True)
-            
-            with open(caminho_csv, mode="w", newline="", encoding="utf-8") as f:
-                writer = csv.writer(f)
-                writer.writerow(["Gerencia", "Valor Praticado"])
-                writer.writerows(dados)
+                # 1. Navegar (Garante limpar estado/filtros anteriores)
+                await ranking_page.navegar_para_ranking_vendas()
                 
-            logger.info(f"Dados salvos em: {caminho_csv}")
+                # 2. Selecionar Datas (Faturamento)
+                await ranking_page.selecionar_datas_faturamento()
+                
+                # Preencher estrutura se houver (EUD)
+                if estrutura:
+                    await ranking_page.preencher_estrutura(estrutura)
+                
+                # 3. Selecionar Ciclos (usando o ciclo atual do loop)
+                await ranking_page.selecionar_ciclos(ciclo, ciclo)
+                
+                # 4. Filtros adicionais (Situação Fiscal, Agrupamento) e Buscar
+                await ranking_page.preencher_filtros_adicionais()
+                await ranking_page.buscar()
+
+                # 5. Extrair e Salvar
+                dados = await ranking_page.extrair_tabela()
+                
+                # Define caminho do arquivo (com ciclo para evitar sobrescrita)
+                caminho_csv = f"extracoes/resultado_filtros_{tipo}_{ciclo}.csv"
+                os.makedirs(os.path.dirname(caminho_csv), exist_ok=True)
+                
+                with open(caminho_csv, mode="w", newline="", encoding="utf-8") as f:
+                    writer = csv.writer(f)
+                    writer.writerow(["Gerencia", "Valor Praticado"])
+                    writer.writerows(dados)
+                    
+                logger.info(f"Dados salvos em: {caminho_csv}")
+        
+        logger.info(f"========== EXTRAÇÃO COMPLETA: {len(ciclos_lista)} ciclo(s) processado(s) ==========")
 
 
 
