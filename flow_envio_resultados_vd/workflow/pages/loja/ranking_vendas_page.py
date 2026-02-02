@@ -109,10 +109,25 @@ class RankingVendasPage(BasePage):
         logger.info("Iniciando extração da tabela...")
         
         resultados = []
+        motivo_vazio = None  # Para rastrear por que retornou vazio
+        
         try:
+            # Aguarda um momento para garantir estabilidade da página após busca
+            await self.page.wait_for_timeout(2000)
+            
+            # DEBUG: Log da URL atual
+            logger.info(f"[DEBUG] URL atual: {self.page.url}")
+            
             # 1. Verifica se apareceu o POP-UP de "Nenhum registro encontrado"
             # O modal tem id="mensagemPanel" e o botão OK tem id="popupOkButton"
-            if await self.page.locator("#mensagemPanel").is_visible(timeout=3000):
+            popup_visivel = False
+            try:
+                await self.page.locator("#mensagemPanel").wait_for(state="visible", timeout=2000)
+                popup_visivel = True
+            except:
+                pass  # Popup não apareceu, prosseguir
+            
+            if popup_visivel:
                 logger.info("Pop-up de alerta detectado.")
                 try:
                     # Tenta ler a mensagem para logar
@@ -126,30 +141,58 @@ class RankingVendasPage(BasePage):
                     # Aguarda modal fechar para garantir que a interface está limpa
                     await self.page.locator("#mensagemPanel").wait_for(state="hidden", timeout=5000)
                     
-                    return [] # Retorna vazio pois não há registros
+                    motivo_vazio = "popup_nenhum_registro"
+                    return []
                 except Exception as e_modal:
                     logger.warning(f"Erro ao tratar pop-up: {e_modal}")
 
-            # 2. Tenta verificar mensagem de texto solta (legacy ou outra forma de aviso)
-            if await self.page.get_by_text("Nenhum registro", exact=False).is_visible(timeout=2000):
-                logger.info("Mensagem de 'Nenhum registro' detectada na página. Retornando lista vazia.")
-                return []
 
-            # Aguarda tabela aparecer (se não estava vazio, deve aparecer a tabela)
+            # 2. Verificação de "Nenhum registro" removida - causava falsos positivos
+            # A tabela pode existir mesmo com esse texto em outro lugar da página
+
+            # 3. Aguarda tabela aparecer
+            logger.info("Aguardando tabela de resultados...")
             tabela = self.page.locator("#ContentPlaceHolder1_grdRankingVendas")
-            if await tabela.is_visible(timeout=5000): # Reduzido timeout pois já testamos o vazio
-                # Itera sobre as linhas
-                linhas = await tabela.locator("tr").all()
+            try:
+                await tabela.wait_for(state="visible", timeout=10000)
+                logger.info("[DEBUG] Tabela encontrada e visível!")
+            except Exception as e_tabela:
+                logger.warning(f"Tabela não apareceu no timeout: {e_tabela}")
+                motivo_vazio = "tabela_nao_apareceu"
+                # Salva debug
+                await self._salvar_debug_extracao("tabela_timeout")
+                return []
+            
+            # DEBUG: Pega o HTML da tabela para análise
+            try:
+                tabela_html = await tabela.inner_html()
+                logger.info(f"[DEBUG] HTML da tabela (primeiros 1000 chars): {tabela_html[:1000]}...")
+            except Exception as e_html:
+                logger.warning(f"[DEBUG] Não foi possível obter HTML da tabela: {e_html}")
+            
+            # NOVA ABORDAGEM: Busca diretamente as células com classe grid_celula
+            # e agrupa por linhas (cada linha de dados tem 6 células)
+            logger.info("[DEBUG] Usando abordagem direta: buscando todas as células td.grid_celula...")
+            
+            todas_celulas = await tabela.locator('[class="grid_celula"]').all()
+            logger.info(f"[DEBUG] Total de células grid_celula encontradas: {len(todas_celulas)}")
+            
+            # Se encontrou células, processa em grupos de 6 (uma linha tem 6 colunas)
+            if todas_celulas:
+                colunas_por_linha = 6  # Gerência, Qtd Itens, Qtd Revendedor, Faturamento, Valor Praticado, Valor Venda
                 
-                for linha in linhas:
-                    # Células com classe grid_celula
-                    tds = await linha.locator("td.grid_celula").all()
-                    if len(tds) >= 5:
-                        gerencia = await tds[0].inner_text()
-                        valor_praticado = await tds[4].inner_text()
+                for i in range(0, len(todas_celulas), colunas_por_linha):
+                    if i + colunas_por_linha <= len(todas_celulas):
+                        # Pega as 6 células desta linha
+                        celulas_linha = todas_celulas[i:i + colunas_por_linha]
+                        
+                        gerencia = await celulas_linha[0].inner_text()
+                        valor_praticado = await celulas_linha[4].inner_text()  # Índice 4 = Valor Praticado
                         
                         gerencia = gerencia.strip()
                         valor_praticado = valor_praticado.strip()
+                        
+                        logger.info(f"[DEBUG] Linha {i // colunas_por_linha}: Gerencia='{gerencia}', ValorPraticado='{valor_praticado}'")
                         
                         # Tratamento numérico (pt-BR para float)
                         # Ex: 1.234,56 -> 1234.56
@@ -162,13 +205,91 @@ class RankingVendasPage(BasePage):
                             logger.warning(f"Falha ao converter valor: {valor_praticado} (Gerencia: {gerencia})")
                         
                         resultados.append([gerencia, valor_float])
-                        
-                logger.info(f"Extraídos {len(resultados)} registros.")
-                return resultados
             else:
-                logger.warning("Tabela não apareceu e nem mensagem de vazio. Verifique se houve erro no carregamento.")
-                return []
+                # FALLBACK: Tenta a abordagem antiga iterando sobre tr
+                logger.info("[DEBUG] Nenhuma célula td.grid_celula encontrada. Tentando abordagem por linhas (tr)...")
+                
+                linhas = await tabela.locator("tbody > tr").all()
+                logger.info(f"[DEBUG] Total de linhas (tbody > tr): {len(linhas)}")
+                
+                # Se não encontrou com tbody, tenta sem
+                if not linhas:
+                    linhas = await tabela.locator("tr").all()
+                    logger.info(f"[DEBUG] Total de linhas (tr direto): {len(linhas)}")
+                
+                for i, linha in enumerate(linhas):
+                    # DEBUG: Log do HTML de cada linha
+                    try:
+                        linha_html = await linha.inner_html()
+                        logger.info(f"[DEBUG] Linha {i} HTML (primeiros 300 chars): {linha_html[:300]}...")
+                    except:
+                        pass
+                    
+                    # Tenta pegar células genéricas (td)
+                    tds = await linha.locator("td").all()
+                    
+                    if not tds:
+                        # Provavelmente é header (th)
+                        ths = await linha.locator("th").all()
+                        if ths:
+                            logger.info(f"[DEBUG] Linha {i}: Cabeçalho detectado ({len(ths)} ths).")
+                        continue
+
+                    if len(tds) >= 5:
+                        gerencia = await tds[0].inner_text()
+                        valor_praticado = await tds[4].inner_text()
+                        
+                        gerencia = gerencia.strip()
+                        valor_praticado = valor_praticado.strip()
+                        
+                        logger.info(f"[DEBUG] Linha {i}: Gerencia='{gerencia}', ValorPraticado='{valor_praticado}'")
+                        
+                        valor_limpo = valor_praticado.replace('.', '').replace(',', '.')
+                        
+                        try:
+                            valor_float = float(valor_limpo)
+                        except ValueError:
+                            valor_float = 0.0
+                            logger.warning(f"Falha ao converter valor: {valor_praticado} (Gerencia: {gerencia})")
+                        
+                        resultados.append([gerencia, valor_float])
+                    else:
+                        logger.warning(f"Linha {i} ignorada: Apenas {len(tds)} colunas encontradas (esperado >= 5).")
+                    
+            logger.info(f"Extraídos {len(resultados)} registros.")
+            
+            # Se extraiu 0 registros mas a tabela existia, salva debug
+            if len(resultados) == 0:
+                motivo_vazio = "tabela_sem_dados"
+                await self._salvar_debug_extracao("tabela_vazia")
+            
+            return resultados
             
         except Exception as e:
             logger.error(f"Erro na extração da tabela: {e}")
+            await self._salvar_debug_extracao("erro_extracao")
             return []
+        finally:
+            if motivo_vazio:
+                logger.warning(f"[DEBUG] Extração retornou vazio. Motivo: {motivo_vazio}")
+    
+    async def _salvar_debug_extracao(self, prefixo: str):
+        """Salva screenshot e HTML para debug quando extração falha."""
+        try:
+            import os
+            os.makedirs("extracoes/debug", exist_ok=True)
+            
+            # Screenshot
+            screenshot_path = f"extracoes/debug/{prefixo}_screenshot.png"
+            await self.page.screenshot(path=screenshot_path, full_page=True)
+            logger.info(f"[DEBUG] Screenshot salvo: {screenshot_path}")
+            
+            # HTML
+            html_path = f"extracoes/debug/{prefixo}_page.html"
+            html_content = await self.page.content()
+            with open(html_path, "w", encoding="utf-8") as f:
+                f.write(html_content)
+            logger.info(f"[DEBUG] HTML salvo: {html_path}")
+            
+        except Exception as e:
+            logger.error(f"[DEBUG] Falha ao salvar debug: {e}")
