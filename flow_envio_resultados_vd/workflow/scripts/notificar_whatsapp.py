@@ -19,47 +19,27 @@ EVOLUTION_API_KEY = os.environ.get("EVOLUTION_API_KEY")
 EVOLUTION_INSTANCE = os.environ.get("EVOLUTION_INSTANCE")
 WHATSAPP_GROUP_VD = os.environ.get("WHATSAPP_GROUP_VD")
 
-# Metas Específicas por Ciclo (JSON)
-# Exemplo env: VD_METAS_JSON='{"VD_202602": 150000, "EUD_202602": 50000}'
-VD_METAS_JSON_STR = os.environ.get("VD_METAS_JSON", "{}")
-try:
-    VD_METAS_DICT = json.loads(VD_METAS_JSON_STR)
-except Exception as e:
-    logger.warning(f"Erro ao fazer parse de VD_METAS_JSON: {e}. Nenhuma meta será aplicada.")
-    VD_METAS_DICT = {}
-
-def get_meta(tipo, ciclo):
-    """Retorna a meta específica buscando pela chave 'TIPO_CICLO' (ex: VD_202602)."""
-    chave = f"{tipo}_{ciclo}"
-    
-    # Busca exata: VD_202602
-    meta = VD_METAS_DICT.get(chave)
-    
-    if meta is not None:
-        logger.info(f"Meta encontrada para {chave}: {meta}")
-        return float(meta)
-    
-    logger.info(f"Nenhuma meta definida para {chave}.")
-    return 0.0
 
 def listar_arquivos_extracao():
     """Encontra todos os CSVs de extração no diretório 'extracoes/' ou raiz."""
-    # Tenta padrão na pasta extracoes ou raiz
     padroes = ["extracoes/resultado_filtros_*.csv", "resultado_filtros_*.csv"]
     arquivos = []
     for p in padroes:
         arquivos.extend(glob.glob(p))
-    return list(set(arquivos)) # Remove duplicatas
+    return list(set(arquivos))
+
 
 def formatar_valor(valor):
-    """Formata valor para o padrão brasileiro: R$ 1.234,56"""
+    """Formata valor float para o padrão brasileiro: R$ 1.234,56"""
     try:
-        val_float = float(str(valor).replace("R$", "").replace(".", "").replace(",", ".").strip())
+        val_float = float(valor)
     except:
         val_float = 0.0
-        
+    
+    # Formata com separadores brasileiros
     v = f"{val_float:,.2f}"
     return f"R$ {v.replace(',', 'X').replace('.', ',').replace('X', '.')}"
+
 
 def extrair_metadados_arquivo(filename):
     """Extrai Tipo e Ciclo do nome do arquivo (ex: resultado_filtros_VD_202602.csv)."""
@@ -72,11 +52,31 @@ def extrair_metadados_arquivo(filename):
         return tipo, ciclo
     return "DESCONHECIDO", "N/A"
 
-def processar_arquivo_e_enviar(caminho_arquivo):
-    """Lê um CSV, formata a mensagem e envia."""
+
+def extrair_numero_ciclo(ciclo_completo):
+    """Extrai número do ciclo de '202602' -> '2'"""
+    # Pega os últimos 2 dígitos e remove zero à esquerda
+    if len(ciclo_completo) >= 2:
+        return str(int(ciclo_completo[-2:]))  # "02" -> "2"
+    return ciclo_completo
+
+
+def mapear_tipo_exibicao(tipo):
+    """Mapeia tipo interno para nome de exibição: VD -> PEF"""
+    mapeamento = {
+        "VD": "PEF",
+        "EUD": "EUD"
+    }
+    return mapeamento.get(tipo, tipo)
+
+
+def processar_arquivo(caminho_arquivo):
+    """Lê um CSV e retorna dados formatados."""
     logger.info(f"Processando arquivo: {caminho_arquivo}")
     
     tipo, ciclo = extrair_metadados_arquivo(caminho_arquivo)
+    tipo_exibicao = mapear_tipo_exibicao(tipo)
+    numero_ciclo = extrair_numero_ciclo(ciclo)
     
     dados_lojas = []
     total_realizado = 0.0
@@ -85,55 +85,49 @@ def processar_arquivo_e_enviar(caminho_arquivo):
         with open(caminho_arquivo, mode="r", encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
-                gerencia = row.get("Gerencia", "N/A")
-                valor_str = row.get("Valor Praticado", "0")
+                gerencia = row.get("Gerencia", "N/A").strip()
+                valor_str = row.get("Valor Praticado", "0").strip()
                 
-                # Limpeza básica do valor para soma
+                # Valor já vem como decimal (ex: 1220.08)
                 try:
-                    valor_float = float(valor_str.replace("R$", "").replace(".", "").replace(",", ".").strip())
+                    valor_float = float(valor_str)
                 except:
                     valor_float = 0.0
                 
-                total_realizado += valor_float
-                dados_lojas.append({"loja": gerencia, "valor": valor_float})
-                
+                if gerencia and valor_float > 0:
+                    total_realizado += valor_float
+                    dados_lojas.append({"loja": gerencia, "valor": valor_float})
+                    
     except Exception as e:
         logger.error(f"Erro ao ler arquivo {caminho_arquivo}: {e}")
-        return
+        return None
 
-    # Se não houver dados, pula
     if not dados_lojas:
         logger.warning(f"Arquivo vazio ou sem dados válidos: {caminho_arquivo}")
-        return
+        return None
 
-    # Monta Mensagem
-    msg = [f"➡️ *Parcial Receita {tipo} - Ciclo {ciclo}*", ""]
-    
-    for item in dados_lojas:
-        msg.append(f" {item['loja']}: {formatar_valor(item['valor'])}")
-    
-    msg.append("")
-    
-    # Busca meta dinâmica (VD ou EUD)
-    META_ATUAL = get_meta(tipo, ciclo)
-    
-    if META_ATUAL > 0:
-        logger.info(f"Calculando meta para {tipo} (Ciclo {ciclo})...")
-        diff = total_realizado - META_ATUAL
-        msg.append(f"🎯 *Meta*: {formatar_valor(META_ATUAL)}")
-        msg.append(f"💰 *Realizado*: {formatar_valor(total_realizado)}")
-        
-        if diff < 0:
-            msg.append(f"🔴 *Faltante*: {formatar_valor(abs(diff))}")
-        else:
-            msg.append(f"🎉 *Superavit*: {formatar_valor(diff)}")
-    else:
-         msg.append(f"💰 *Total*: {formatar_valor(total_realizado)}")
+    return {
+        "tipo": tipo,
+        "tipo_exibicao": tipo_exibicao,
+        "ciclo": ciclo,
+        "numero_ciclo": numero_ciclo,
+        "lojas": dados_lojas,
+        "total": total_realizado
+    }
 
-    texto_final = "\n".join(msg)
+
+def montar_bloco_mensagem(dados):
+    """Monta bloco de mensagem para um tipo (PEF ou EUD)."""
+    linhas = [f"➡️ *Parcial Receita {dados['tipo_exibicao']} - Ciclo {dados['numero_ciclo']}*", ""]
     
-    # Envia
-    enviar_para_whatsapp(texto_final)
+    for item in dados["lojas"]:
+        linhas.append(f" {item['loja']}: {formatar_valor(item['valor'])}")
+    
+    linhas.append("")
+    linhas.append(f"💰 *Realizado*: {formatar_valor(dados['total'])}")
+    
+    return "\n".join(linhas)
+
 
 def enviar_para_whatsapp(mensagem):
     if not EVOLUTION_API_URL or not EVOLUTION_API_KEY:
@@ -163,20 +157,42 @@ def enviar_para_whatsapp(mensagem):
     except Exception as e:
         logger.error(f"Erro ao enviar WhatsApp: {e}")
 
+
 if __name__ == "__main__":
-    logger.info("--- Iniciando Processador de Notificações (Multi-Ciclo) ---")
+    logger.info("--- Iniciando Processador de Notificações ---")
     
     arquivos = listar_arquivos_extracao()
     
     if not arquivos:
         logger.warning("Nenhum arquivo CSV encontrado em 'extracoes/' ou raiz!")
-    else:
-        logger.info(f"Encontrados {len(arquivos)} arquivos para processar: {arquivos}")
-        
-        # Ordena para enviar em ordem lógica (ex: VD antes de EUD, ou por ciclo)
-        arquivos.sort() 
-        
-        for arq in arquivos:
-            processar_arquivo_e_enviar(arq)
-            
+        sys.exit(0)
+    
+    logger.info(f"Encontrados {len(arquivos)} arquivos para processar: {arquivos}")
+    
+    # Processa todos os arquivos
+    todos_dados = []
+    for arq in arquivos:
+        dados = processar_arquivo(arq)
+        if dados:
+            todos_dados.append(dados)
+    
+    if not todos_dados:
+        logger.warning("Nenhum dado válido encontrado nos arquivos!")
+        sys.exit(0)
+    
+    # Ordena: PEF (VD) primeiro, depois EUD
+    ordem_tipos = {"VD": 1, "EUD": 2}
+    todos_dados.sort(key=lambda x: (ordem_tipos.get(x["tipo"], 99), x["ciclo"]))
+    
+    # Monta mensagem única combinando todos os blocos
+    blocos = []
+    for dados in todos_dados:
+        blocos.append(montar_bloco_mensagem(dados))
+    
+    separador = "\n\n────────────────────\n\n"
+    mensagem_final = separador.join(blocos)
+    
+    # Envia mensagem única
+    enviar_para_whatsapp(mensagem_final)
+    
     logger.info("--- Fim do Processamento ---")
