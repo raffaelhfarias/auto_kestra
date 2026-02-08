@@ -6,3 +6,4 @@ __pycache__/
 .venv/
 /kestra/
 state.json
+/extracoes/
