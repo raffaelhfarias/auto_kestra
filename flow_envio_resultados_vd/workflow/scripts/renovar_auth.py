@@ -98,9 +98,25 @@ async def run():
             await page.wait_for_timeout(5000)
 
             current_url = page.url.lower()
-            if "aguardaracao" in current_url or ("entrar.aspx" not in current_url and "account/login" not in current_url):
-                 logger.info(f"Redirecionamento detectado após Login Externo (URL: {current_url}). Pulando login Google.")
+            
+            # Verifica se estamos em uma página que indica login bem-sucedido
+            # IMPORTANTE: accounts.google.com significa que AINDA precisamos fazer login no Google!
+            url_e_google = "accounts.google.com" in current_url
+            url_e_login_sgi = "entrar.aspx" in current_url or "account/login" in current_url
+            url_e_aguardaracao = "aguardaracao" in current_url
+            url_e_dashboard_sgi = "sgi.e-boticario.com.br" in current_url and not url_e_login_sgi
+            
+            logger.info(f"URL atual: {current_url}")
+            logger.info(f"É Google: {url_e_google}, É login SGI: {url_e_login_sgi}, É AguardarAcao: {url_e_aguardaracao}, É Dashboard SGI: {url_e_dashboard_sgi}")
+            
+            if url_e_aguardaracao or url_e_dashboard_sgi:
+                 logger.info("Redirecionamento para SGI detectado. Login já realizado via SSO!")
                  estamos_logados = True
+            elif url_e_google:
+                 logger.info("Estamos na tela de login do Google. Precisamos realizar autenticação...")
+                 # NÃO marcar como logado - precisamos continuar com o login do Google
+            else:
+                 logger.info(f"URL não reconhecida. Tentando prosseguir com login Google...")
             
             if not estamos_logados:
                 # Realiza o login no Google apenas se AINDA não estivermos logados
@@ -108,19 +124,20 @@ async def run():
                 senha = os.environ.get("VD_PASS")
                 
                 if email and senha:
+                    logger.info(f"Credenciais encontradas. Realizando login com: {email}")
                     await login_page.realizar_login_google(email, senha)
+                    
+                    # Aguarda login completar
+                    await page.wait_for_load_state("networkidle")
+                    titulo = await page.title()
+                    logger.info(f"Login Google realizado! Título atual: {titulo}")
+                    
+                    # Check para tela de confirmação google
+                    if "Confirme que é você" in titulo:
+                         logger.warning("Tela de confirmação do Google detectada!")
+                         await page.screenshot(path="debug_google_confirmation_renova.png")
                 else:
-                    logger.warning("Credenciais VD_USER ou VD_PASS não encontradas no .env!")
-                
-                # Aguarda login completar
-                await page.wait_for_load_state("networkidle")
-                titulo = await page.title()
-                logger.info(f"Login Google realizado! Título atual: {titulo}")
-                
-                # Check para tela de confirmação google
-                if "Confirme que é você" in titulo:
-                     logger.warning("Tela de confirmação do Google detectada!")
-                     await page.screenshot(path="debug_google_confirmation_renova.png")
+                    logger.warning("Credenciais VD_USER ou VD_PASS não encontradas no ambiente!")
 
         # --- TRATAMENTO AGUARDAR AÇÃO / VALIDAÇÃO FINAL ---
         # Se estivermos na página de AguardarAcao, devemos esperar ela sair.
