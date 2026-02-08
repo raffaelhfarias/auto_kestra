@@ -26,7 +26,6 @@ class Navegador:
 
         # Argumentos críticos para estabilidade e evasão
         args = [
-            "--headless=new",
             "--disable-features=IsolateOrigins,site-per-process",
             "--disable-blink-features=AutomationControlled",
             "--no-sandbox",
@@ -40,9 +39,10 @@ class Navegador:
         ]
 
         self.browser = await self.playwright.chromium.launch(
-            headless=True,
+            headless=True, # Mantém headless=True para Docker
             channel="chromium",
             args=args,
+            ignore_default_args=["--enable-automation"], # Ajuda a remover barra de automação
             slow_mo=0 # Removido slow_mo para máxima performance dinâmica
         )
 

@@ -132,9 +132,10 @@ async def run():
                     titulo = await page.title()
                     logger.info(f"Login Google realizado! Título atual: {titulo}")
                     
-                    # Check para tela de confirmação google
-                    if "Confirme que é você" in titulo:
-                         logger.warning("Tela de confirmação do Google detectada!")
+            # Check para tela de confirmação google
+                    if "Confirme que é você" in titulo or "Confirm it's you" in titulo: # Adicionado checagem em ingles por garantia
+                         logger.warning("Tela de confirmação do Google detectada! Marcando como NÃO logado.")
+                         estamos_logados = False # Garante que não vamos salvar cookies ruins
                          await page.screenshot(path="debug_google_confirmation_renova.png")
                 else:
                     logger.warning("Credenciais VD_USER ou VD_PASS não encontradas no ambiente!")
@@ -147,26 +148,35 @@ async def run():
                 # O mais seguro é esperar pelo carregamento do Menu Principal
                 await page.wait_for_selector("#menu-cod-4", state="visible", timeout=60000)
                 logger.info("Dashboard carregado! Sessão renovada com sucesso.")
+                estamos_logados = True # Confirma login
             except Exception as e:
                 logger.warning(f"Timeout aguardando Dashboard/Menu. Sessão pode não ter sido totalmente estabelecida. Erro: {e}")
+                # Se falhar aqui, talvez seja melhor não confiar na sessão
+                # estamos_logados = False 
         else:
             # Se não for AguardarAcao, pode ser que já esteja no Dashboard, vamos tentar validar
             # Aguarda um tempo incondicional para processamento de login/scripts da página
-            logger.info("Aguardando 15 segundos para estabilização da página...")
-            await page.wait_for_timeout(15000)
+            if estamos_logados: # Só espera se acharmos que estamos logados
+                logger.info("Aguardando 15 segundos para estabilização da página...")
+                await page.wait_for_timeout(15000)
 
-            try:
-                if await page.get_by_text("Força de Vendas").is_visible(timeout=60000):
-                    logger.info("Dashboard verificado via texto 'Força de Vendas'.")
-                else:
-                     logger.info("Elemento 'Força de Vendas' não encontrado após 60s")
-            except:
-                logger.info("Não foi possível confirmar visualmente o Dashboard, mas prosseguindo com salvamento de estado.")
+                try:
+                    if await page.get_by_text("Força de Vendas").is_visible(timeout=60000):
+                        logger.info("Dashboard verificado via texto 'Força de Vendas'.")
+                        estamos_logados = True
+                    else:
+                        logger.info("Elemento 'Força de Vendas' não encontrado após 60s")
+                        # Se não achou, mantemos o estado anterior de estamos_logados ou marcamos como False?
+                        # Por segurança, se não confirmou, talvez seja melhor não salvar, mas as vezes o layout muda.
+                        # Vamos manter o que estava, mas logar aviso.
+                except:
+                    logger.info("Não foi possível confirmar visualmente o Dashboard, mas prosseguindo com salvamento de estado.")
 
         logger.info("Finalizando processo de renovação...")
 
     except Exception as e:
         logger.error(f"Ocorreu um erro durante a renovação da autenticação: {e}")
+        estamos_logados = False # Em caso de erro, não salva
         # Tenta tirar screenshot do erro
         if 'page' in locals():
             try:
@@ -176,13 +186,16 @@ async def run():
                 pass
 
     finally:
-        # salva estado atualizado
-        logger.info("Salvando estado da sessão (cookies/storage)...")
-        try:
-            await navegador.save_state()
-            logger.info("Estado salvo com sucesso em state.json")
-        except Exception as save_err:
-            logger.error(f"Erro ao salvar estado da sessão: {save_err}")
+        # salva estado atualizado APENAS SE ESTIVERMOS LOGADOS COM SUCESSO
+        if 'estamos_logados' in locals() and estamos_logados:
+            logger.info("Login considerado SUCESSO. Salvando estado da sessão (cookies/storage)...")
+            try:
+                await navegador.save_state()
+                logger.info("Estado salvo com sucesso em state.json")
+            except Exception as save_err:
+                logger.error(f"Erro ao salvar estado da sessão: {save_err}")
+        else:
+             logger.warning("Login NÃO foi concluído com sucesso ou ocorreu erro. O estado (cookies) NÃO será salvo para preservar a sessão anterior (se existir).")
         
         await navegador.stop_browser()
 
