@@ -79,38 +79,107 @@ class LoginPage(BasePage):
 
     async def realizar_login_google(self, email, senha):
         """
-        Realiza o login no Google com os passos definidos e tira screenshots.
+        Realiza o login no Google com os passos definidos.
+        Detecta automaticamente se o Google está pedindo:
+        - Email + senha (login completo)
+        - Seleção de conta (múltiplas contas ou "Sem sessão iniciada")
+        - Apenas senha (sessão parcialmente ativa)
         """
         logger.info("Iniciando autenticação Google...")
 
-        # 1. Preencher Email
-        logger.info("Preenchendo Email...")
-        await self.preencher("#identifierId", email)
+        # Verifica os elementos visíveis na tela
+        campo_email_visivel = False
+        campo_senha_visivel = False
+        tela_selecao_conta = False
         
-
-
-        # Clicar em Avançar
-        logger.info("Clicando em Avançar...")
-        await self.page.get_by_role('button', name='Avançar').click()
-
-        # 2. Preencher Senha (esperar aparecer)
-        logger.info("Aguardando campo de senha...")
-        # Usando locator direto conforme solicitado: input[name="Passwd"]
-        # Precisamos esperar estar visivel pois há animação do Google
-        await self.page.locator('input[name="Passwd"]').wait_for(state="visible")
+        try:
+            campo_email_visivel = await self.page.locator("#identifierId").is_visible(timeout=3000)
+        except:
+            pass
         
+        try:
+            campo_senha_visivel = await self.page.locator('input[name="Passwd"]').is_visible(timeout=1000)
+        except:
+            pass
+        
+        # Verifica se é a tela de seleção de conta (conta com "Sem sessão iniciada")
+        try:
+            # Procura pelo elemento com data-identifier do email e texto "Sem sessão iniciada"
+            conta_sem_sessao = self.page.locator(f'div[data-identifier="{email}"]')
+            tela_selecao_conta = await conta_sem_sessao.is_visible(timeout=2000)
+        except:
+            pass
+        
+        logger.info(f"Campo email visível: {campo_email_visivel}, Campo senha visível: {campo_senha_visivel}, Tela seleção conta: {tela_selecao_conta}")
+
+        # CASO 1: Tela de seleção de conta (precisa clicar na conta com "Sem sessão iniciada")
+        if tela_selecao_conta:
+            logger.info(f"Tela de seleção de conta detectada. Clicando na conta: {email}...")
+            conta_element = self.page.locator(f'div[data-identifier="{email}"]')
+            await conta_element.click()
+            logger.info("Conta selecionada. Aguardando campo de senha...")
+            
+            # Aguarda o campo de senha aparecer após selecionar a conta
+            await self.page.locator('input[name="Passwd"]').wait_for(state="visible", timeout=10000)
+        
+        # CASO 2: Campo de email está visível (login completo)
+        elif campo_email_visivel:
+            logger.info("Preenchendo Email...")
+            await self.preencher("#identifierId", email)
+
+            # Clicar em Avançar
+            logger.info("Clicando em Avançar...")
+            await self.page.get_by_role('button', name='Avançar').click()
+
+            # Aguardar campo de senha aparecer (há animação do Google)
+            logger.info("Aguardando campo de senha...")
+            await self.page.locator('input[name="Passwd"]').wait_for(state="visible", timeout=10000)
+        
+        # CASO 3: Campo de senha já está visível (sessão parcial)
+        elif campo_senha_visivel:
+            logger.info("Sessão parcial do Google detectada - pulando para preenchimento de senha...")
+        
+        # CASO 4: Nenhum campo visível - aguarda e tenta novamente
+        else:
+            logger.info("Nenhum campo visível ainda. Aguardando...")
+            await self.page.wait_for_timeout(3000)
+            
+            # Tenta novamente verificar seleção de conta
+            try:
+                conta_sem_sessao = self.page.locator(f'div[data-identifier="{email}"]')
+                if await conta_sem_sessao.is_visible(timeout=2000):
+                    logger.info(f"Tela de seleção de conta detectada (retry). Clicando na conta: {email}...")
+                    await conta_sem_sessao.click()
+                    await self.page.locator('input[name="Passwd"]').wait_for(state="visible", timeout=10000)
+            except:
+                pass
+            
+            # Tenta novamente verificar o campo de senha
+            try:
+                await self.page.locator('input[name="Passwd"]').wait_for(state="visible", timeout=10000)
+                logger.info("Campo de senha encontrado após aguardar.")
+            except:
+                # Pode ser que precise do email
+                try:
+                    if await self.page.locator("#identifierId").is_visible(timeout=3000):
+                        logger.info("Campo de email apareceu. Preenchendo...")
+                        await self.preencher("#identifierId", email)
+                        await self.page.get_by_role('button', name='Avançar').click()
+                        await self.page.locator('input[name="Passwd"]').wait_for(state="visible", timeout=10000)
+                except Exception as e:
+                    logger.error(f"Não foi possível encontrar campo de login: {e}")
+                    raise
+        
+        # Preencher Senha
         logger.info("Preenchendo Senha...")
         await self.page.locator('input[name="Passwd"]').fill(senha)
 
         # Clicar em Avançar novamente
         logger.info("Clicando em Avançar (Login)...")
         await self.page.get_by_role('button', name='Avançar').click()
-
-        # Aguardar navegação ou erro
-        # try:
-        #     await self.page.wait_for_load_state("networkidle", timeout=10000)
-        # except:
-        #     pass
+        
+        # Aguarda um momento para o login processar
+        await self.page.wait_for_timeout(3000)
 
     async def is_login_button_visible(self):
         """
