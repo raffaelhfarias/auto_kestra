@@ -180,19 +180,37 @@ if __name__ == "__main__":
         logger.warning("Nenhum dado válido encontrado nos arquivos!")
         sys.exit(0)
     
-    # Ordena: PEF (VD) primeiro, depois EUD
-    ordem_tipos = {"VD": 1, "EUD": 2}
-    todos_dados.sort(key=lambda x: (ordem_tipos.get(x["tipo"], 99), x["ciclo"]))
+    # Agrupa dados por número do ciclo
+    dados_por_ciclo = {}
+    for item in todos_dados:
+        ciclo = item["numero_ciclo"]
+        if ciclo not in dados_por_ciclo:
+            dados_por_ciclo[ciclo] = []
+        dados_por_ciclo[ciclo].append(item)
     
-    # Monta mensagem única combinando todos os blocos
-    blocos = []
-    for dados in todos_dados:
-        blocos.append(montar_bloco_mensagem(dados))
+    # Ordena ciclos para envio sequencial
+    ciclos_ordenados = sorted(dados_por_ciclo.keys())
     
     separador = "\n\n────────────────────\n\n"
-    mensagem_final = separador.join(blocos)
-    
-    # Envia mensagem única
-    enviar_para_whatsapp(mensagem_final)
+    ordem_tipos = {"VD": 1, "EUD": 2}
+
+    logger.info(f"Ciclos identificados para envio: {ciclos_ordenados}")
+
+    # Envia uma mensagem por ciclo
+    for ciclo in ciclos_ordenados:
+        itens_ciclo = dados_por_ciclo[ciclo]
+        
+        # Ordena dentro do ciclo: PEF (VD) primeiro, depois EUD
+        itens_ciclo.sort(key=lambda x: ordem_tipos.get(x["tipo"], 99))
+        
+        blocos = []
+        for dados in itens_ciclo:
+            bloco = montar_bloco_mensagem(dados)
+            blocos.append(bloco)
+            
+        mensagem_ciclo = separador.join(blocos)
+        
+        logger.info(f"--- Enviando mensagem consolidada do Ciclo {ciclo} ---")
+        enviar_para_whatsapp(mensagem_ciclo)
     
     logger.info("--- Fim do Processamento ---")
