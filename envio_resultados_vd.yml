@@ -2,7 +2,8 @@ id: envio_resultados_vd
 namespace: company.team
 
 description: |
-  Automação SGI - Renovação de cookies (30min) + Envio de resultados (horários específicos).
+  Automação SGI via Browserless - Renovação de cookies (15min) + Envio de resultados (horários específicos).
+  Usa Browserless (stealth=true, headless=false) para bypass de detecção do Google.
 
 inputs:
   - id: modo
@@ -77,13 +78,17 @@ tasks:
       # === MODO RENOVAR: Apenas renova cookies ===
       - id: renovar_auth
         type: io.kestra.plugin.scripts.python.Commands
-        containerImage: mcr.microsoft.com/playwright/python:v1.57.0-noble
+        containerImage: python:3.11-slim
         runIf: "{{ inputs.modo == 'renovar' }}"
         env:
           VD_USER: "{{ kv('VD_USER') }}"
           VD_PASS: "{{ kv('VD_PASS') }}"
+          GOOGLE_TOTP_SECRET: "{{ kv('GOOGLE_TOTP_SECRET') }}"
+          SERVICE_URL_BROWSERLESS: "{{ kv('SERVICE_URL_BROWSERLESS') }}"
+          SERVICE_PASSWORD_BROWSERLESS: "{{ kv('SERVICE_PASSWORD_BROWSERLESS') }}"
         beforeCommands:
           - pip install -r flow_envio_resultados_vd/requirements.txt
+          - pip install playwright && playwright install chromium
         commands:
           - export PYTHONPATH=flow_envio_resultados_vd && python flow_envio_resultados_vd/workflow/scripts/renovar_auth.py
         outputFiles:
@@ -93,14 +98,18 @@ tasks:
       # === MODO COMPLETO: Extração + WhatsApp ===
       - id: extracao_vd
         type: io.kestra.plugin.scripts.python.Commands
-        containerImage: mcr.microsoft.com/playwright/python:v1.57.0-noble
+        containerImage: python:3.11-slim
         runIf: "{{ inputs.modo == 'completo' }}"
         env:
           VD_USER: "{{ kv('VD_USER') }}"
           VD_PASS: "{{ kv('VD_PASS') }}"
           VD_CICLOS: "{{ kv('VD_CICLOS') }}"
+          GOOGLE_TOTP_SECRET: "{{ kv('GOOGLE_TOTP_SECRET') }}"
+          SERVICE_URL_BROWSERLESS: "{{ kv('SERVICE_URL_BROWSERLESS') }}"
+          SERVICE_PASSWORD_BROWSERLESS: "{{ kv('SERVICE_PASSWORD_BROWSERLESS') }}"
         beforeCommands:
           - pip install -r flow_envio_resultados_vd/requirements.txt
+          - pip install playwright && playwright install chromium
         commands:
           - export PYTHONPATH=flow_envio_resultados_vd && python flow_envio_resultados_vd/workflow/scripts/loja.py
         outputFiles:
@@ -138,5 +147,3 @@ tasks:
           - pip install requests python-dotenv
         commands:
           - python flow_envio_resultados_vd/workflow/scripts/notificar_whatsapp.py
-
-disabled: true

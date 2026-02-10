@@ -116,7 +116,7 @@ async def run():
                 if email and senha:
                     await login_page.realizar_login_google(email, senha)
                 else:
-                    logger.warning("Credenciais VD_USER ou VD_PASS não encontradas no .env!")
+                    logger.warning("Credenciais VD_USER ou VD_PASS nao encontradas no ambiente!")
                 
                 # Aguarda login completar
                 await page.wait_for_load_state("networkidle")

@@ -15,10 +15,14 @@ from workflow.components.navegador import Navegador
 from workflow.pages.loja.login_page import LoginPage
 
 # Configuração de Logs
+_log_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    handlers=[logging.StreamHandler(sys.stdout)]
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler(os.path.join(_log_dir, "renovar_auth.log"), mode="w", encoding="utf-8"),
+    ]
 )
 logger = logging.getLogger(__name__)
 
@@ -138,7 +142,7 @@ async def run():
                          estamos_logados = False # Garante que não vamos salvar cookies ruins
                          await page.screenshot(path="debug_google_confirmation_renova.png")
                 else:
-                    logger.warning("Credenciais VD_USER ou VD_PASS não encontradas no ambiente!")
+                    logger.warning("Credenciais VD_USER ou VD_PASS nao encontradas no ambiente!")
 
         # --- TRATAMENTO AGUARDAR AÇÃO / VALIDAÇÃO FINAL ---
         # Se estivermos na página de AguardarAcao, devemos esperar ela sair.
