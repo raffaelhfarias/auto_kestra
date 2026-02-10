@@ -78,7 +78,7 @@ tasks:
       # === MODO RENOVAR: Apenas renova cookies ===
       - id: renovar_auth
         type: io.kestra.plugin.scripts.python.Commands
-        containerImage: python:3.11-slim
+        containerImage: mcr.microsoft.com/playwright/python:v1.57.0-noble
         runIf: "{{ inputs.modo == 'renovar' }}"
         env:
           VD_USER: "{{ kv('VD_USER') }}"
@@ -98,7 +98,7 @@ tasks:
       # === MODO COMPLETO: Extração + WhatsApp ===
       - id: extracao_vd
         type: io.kestra.plugin.scripts.python.Commands
-        containerImage: python:3.11-slim
+        containerImage: mcr.microsoft.com/playwright/python:v1.57.0-noble
         runIf: "{{ inputs.modo == 'completo' }}"
         env:
           VD_USER: "{{ kv('VD_USER') }}"
