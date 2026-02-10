@@ -8,6 +8,7 @@ O repositório está dividido em módulos independentes, cada um com sua própri
 
 - **`flow_envio_auditoria/`**: Automação integrada com o portal X para monitoramento de auditorias e envio de notificações detalhadas via WhatsApp.
 - **`flow_envio_resultados/`**: Extração de indicadores de desempenho (Loja) e envio de resumos de metas e resultados.
+- **`flow_envio_resultados_vd/`**: Automação SGI via Browserless para extração de dados de vendas, renovação de sessão (cookies) e envio de resultados via WhatsApp.
 
 ## 🛠️ Stack Tecnológica
 
@@ -49,6 +50,16 @@ Para o funcionamento correto dos flows, as seguintes variáveis devem estar conf
 - `EVOLUTION_INSTANCE`: Nome da instância conectada.
 - `WHATSAPP_GROUP_*`: ID do grupo para auditoria.
 - `WHATSAPP_GROUP_*`: ID do grupo para resultados.
+- `WHATSAPP_GROUP_VD`: ID do grupo para resultados de VD.
+
+### Browserless & SGI (VD)
+- `VD_USER`: Usuário de acesso ao SGI.
+- `VD_PASS`: Senha de acesso ao SGI.
+- `VD_CICLOS`: Configuração de ciclos para extração.
+- `VD_METAS_JSON`: JSON com metas de vendas.
+- `GOOGLE_TOTP_SECRET`: Segredo para geração de 2FA (TOTP) do Google.
+- `SERVICE_URL_BROWSERLESS`: Endpoint do serviço Browserless.
+- `SERVICE_PASSWORD_BROWSERLESS`: Senha/Token do serviço Browserless.
 
 ## 🔄 Sincronização
 
