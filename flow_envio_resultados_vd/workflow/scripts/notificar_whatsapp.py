@@ -14,7 +14,7 @@ logger = logging.getLogger("NotificarWhatsApp")
 load_dotenv()
 
 # Carrega metas do ambiente
-# Formato esperado: {"VD_202602":150000,"EUD_202602":50000,"VD_202603":5000}
+# Formato esperado: {"VD_202602":150000,"EUD_202602":50000,"VD_202603":150000, "EUD_202603":50000}
 METAS_JSON_RAW = os.environ.get("VD_METAS_JSON", "{}")
 try:
     METAS = json.loads(METAS_JSON_RAW)
