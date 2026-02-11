@@ -75,18 +75,14 @@ async def main():
 
                 all_results.append(data)
 
-                # Save individual file
-                filename = f"car_{cs_code}_{year}_{month:02d}.json"
-                filepath = os.path.join(EXTRACOES_DIR, filename)
-                with open(filepath, 'w', encoding='utf-8') as f:
-                    json.dump(data, f, ensure_ascii=False, indent=2)
-                logger.info(f"Saved {filename}")
+                all_results.append(data)
+                # Individual file saving removed as requested
 
         # Save combined file
-        combined_path = os.path.join(EXTRACOES_DIR, "car_all.json")
+        combined_path = os.path.join(EXTRACOES_DIR, "calendarioCar.json")
         with open(combined_path, 'w', encoding='utf-8') as f:
             json.dump(all_results, f, ensure_ascii=False, indent=2)
-        logger.info(f"Saved combined file with {len(all_results)} extractions")
+        logger.info(f"Saved combined file with {len(all_results)} extractions to calendarioCar.json")
 
         logger.add_context("total_extractions", len(all_results))
         success = True

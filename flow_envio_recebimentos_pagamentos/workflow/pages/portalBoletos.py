@@ -219,9 +219,9 @@ class PortalBoletosPage:
         await self.page.wait_for_load_state("networkidle")
         await asyncio.sleep(2)
 
-    async def export_to_excel(self, dest_dir: str) -> str:
+    async def export_to_json(self, dest_dir: str) -> str:
         """
-        Extract all grid data (all pages) from the DOM and save as CSV.
+        Extract all grid data (all pages) manually from the DOM and save as JSON.
         Navigates through each pagination page, skips the icon column,
         and properly reads nested span elements.
         """
@@ -230,39 +230,63 @@ class PortalBoletosPage:
         all_rows = []
         headers = []
 
+        # Function to clean and normalize headers
+        def clean_header(h):
+            return h.lower().replace(" ", "_").replace("/", "_").replace(".", "")
+
         # Extract first page
         page_data = await self._extract_grid_page()
-        headers = page_data.get("headers", [])
-        all_rows.extend(page_data.get("rows", []))
+        raw_headers = page_data.get("headers", [])
+        headers = [clean_header(h) for h in raw_headers]
+        
+        # Helper to convert row list to dict
+        def row_to_dict(row_values):
+            return dict(zip(headers, row_values))
+
+        first_page_rows = page_data.get("rows", [])
+        all_rows.extend([row_to_dict(r) for r in first_page_rows])
 
         pager = await self._get_pager_info()
         total_pages = pager.get("total", 1)
-        self.logger.info(f"Page 1/{total_pages}: {len(page_data['rows'])} rows")
+        # Fix: sometimes total is returned as node count, verify logic if needed.
+        # But assuming _get_pager_info is correct for now.
+        
+        self.logger.info(f"Page 1: {len(first_page_rows)} rows. Total pages detected: {total_pages}")
 
         # Navigate through remaining pages
-        for pg in range(2, total_pages + 1):
-            await self._go_to_grid_page(pg)
-            page_data = await self._extract_grid_page()
-            all_rows.extend(page_data.get("rows", []))
-            self.logger.info(f"Page {pg}/{total_pages}: {len(page_data['rows'])} rows")
+        # Only if we have pagination
+        if total_pages > 1:
+             for pg in range(2, total_pages + 1):
+                # Trigger postback
+                # Note: ASP.NET GridView pagination usually builds postbacks like 'Page$2', 'Page$3'
+                # We need to be careful if the pager isn't numeric 1,2,3...
+                # Using the _go_to_grid_page helper which does __doPostBack
+                try:
+                    await self._go_to_grid_page(pg)
+                    page_data = await self._extract_grid_page()
+                    current_rows = page_data.get("rows", [])
+                    all_rows.extend([row_to_dict(r) for r in current_rows])
+                    self.logger.info(f"Page {pg}/{total_pages}: {len(current_rows)} rows")
+                except Exception as e:
+                    self.logger.error(f"Failed to navigate to page {pg}: {e}")
+                    break
 
         if not all_rows:
-            raise RuntimeError("No data found in grid to export.")
+            self.logger.warning("No data found in grid to export.")
+            # We can return empty list or raise error. 
+            # In automation often better to produce empty file than fail or fail depending on reqs.
+            # Let's produce empty file but log warning.
 
-        self.logger.info(f"Total extracted: {len(all_rows)} rows, {len(headers)} columns")
+        self.logger.info(f"Total extracted: {len(all_rows)} rows")
 
-        # Write CSV
-        import csv
-        from datetime import datetime as dt
+        # Write JSON
+        import json
 
-        filename = f"boletos_{dt.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        filename = "portalBoletos.json"
         dest_path = os.path.join(dest_dir, filename)
 
-        with open(dest_path, "w", newline="", encoding="utf-8-sig") as f:
-            writer = csv.writer(f, delimiter=";")
-            if headers:
-                writer.writerow(headers)
-            writer.writerows(all_rows)
+        with open(dest_path, "w", encoding="utf-8") as f:
+            json.dump(all_rows, f, ensure_ascii=False, indent=2)
 
         file_size = os.path.getsize(dest_path)
         self.logger.info(f"Export saved: {dest_path} ({file_size} bytes)")

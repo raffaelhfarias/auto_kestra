@@ -51,9 +51,9 @@ async def main():
         await portal.fill_dates(start_date, end_date)
         await portal.click_filtrar()
 
-        # Export to Excel
+        # Export to JSON
         os.makedirs(EXTRACOES_DIR, exist_ok=True)
-        filepath = await portal.export_to_excel(EXTRACOES_DIR)
+        filepath = await portal.export_to_json(EXTRACOES_DIR)
         logger.info(f"Extraction complete: {filepath}")
 
         success = True
