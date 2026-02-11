@@ -13,6 +13,16 @@ logger = logging.getLogger("NotificarWhatsApp")
 
 load_dotenv()
 
+# Carrega metas do ambiente
+# Formato esperado: {"VD_202602":150000,"EUD_202602":50000,"VD_202603":5000}
+METAS_JSON_RAW = os.environ.get("VD_METAS_JSON", "{}")
+try:
+    METAS = json.loads(METAS_JSON_RAW)
+    logger.info(f"Metas carregadas: {METAS}")
+except json.JSONDecodeError as e:
+    logger.warning(f"Erro ao parsear VD_METAS_JSON: {e}. Usando metas vazias.")
+    METAS = {}
+
 # Configurações da Evolution API
 EVOLUTION_API_URL = os.environ.get("EVOLUTION_API_URL")
 EVOLUTION_API_KEY = os.environ.get("EVOLUTION_API_KEY")
@@ -106,18 +116,31 @@ def processar_arquivo(caminho_arquivo):
         logger.warning(f"Arquivo vazio ou sem dados válidos: {caminho_arquivo}")
         return None
 
+    # Busca a meta correspondente (chave: TIPO_CICLO, ex: VD_202602)
+    chave_meta = f"{tipo}_{ciclo}"
+    meta_valor = METAS.get(chave_meta)
+    
+    diferenca = None
+    if meta_valor and meta_valor > 0:
+        diferenca = total_realizado - meta_valor
+        logger.info(f"Meta encontrada para {chave_meta}: {meta_valor} | Diferença: {diferenca:.2f}")
+    else:
+        logger.info(f"Nenhuma meta configurada para {chave_meta}")
+
     return {
         "tipo": tipo,
         "tipo_exibicao": tipo_exibicao,
         "ciclo": ciclo,
         "numero_ciclo": numero_ciclo,
         "lojas": dados_lojas,
-        "total": total_realizado
+        "total": total_realizado,
+        "meta": meta_valor,
+        "diferenca": diferenca
     }
 
 
 def montar_bloco_mensagem(dados):
-    """Monta bloco de mensagem para um tipo (PEF ou EUD)."""
+    """Monta bloco de mensagem para um tipo (PEF ou EUD), incluindo meta e atingimento."""
     linhas = [f"➡️ *Parcial Receita {dados['tipo_exibicao']} - Ciclo {dados['numero_ciclo']}*", ""]
     
     for item in dados["lojas"]:
@@ -125,6 +148,17 @@ def montar_bloco_mensagem(dados):
     
     linhas.append("")
     linhas.append(f"💰 *Realizado*: {formatar_valor(dados['total'])}")
+    
+    # Adiciona meta e diferença se disponíveis
+    if dados.get("meta"):
+        linhas.append(f"🎯 *Meta*: {formatar_valor(dados['meta'])}")
+    
+    if dados.get("diferenca") is not None:
+        dif = dados["diferenca"]
+        if dif >= 0:
+            linhas.append(f"🟢 *Ultrapassou*: {formatar_valor(dif)}")
+        else:
+            linhas.append(f"🔴 *Faltante*: {formatar_valor(dif)}")
     
     return "\n".join(linhas)
 
