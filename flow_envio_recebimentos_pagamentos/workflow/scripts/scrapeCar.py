@@ -9,6 +9,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../'
 from dotenv import load_dotenv
 from workflow.components.navegador import Navegador
 from workflow.components.wide_logger import WideLogger
+from workflow.components.data_cleaners import parse_brl, parse_titulos
 from workflow.pages.calendarioCar import CalendarioCarPage, CS_CODES, MESES
 
 load_dotenv()
@@ -78,11 +79,25 @@ async def main():
                 all_results.append(data)
                 # Individual file saving removed as requested
 
-        # Save combined file
-        combined_path = os.path.join(EXTRACOES_DIR, "calendarioCar.json")
-        with open(combined_path, 'w', encoding='utf-8') as f:
+        # Clean financial data: add numeric fields
+        for entry in all_results:
+            entry['total_recebimentos_num'] = parse_brl(entry.get('total_recebimentos', ''))
+            entry['total_agendamentos_num'] = parse_brl(entry.get('total_agendamentos', ''))
+            for day in entry.get('days', []):
+                day['value_num'] = parse_brl(day.get('value', ''))
+                day['titulos_num'] = parse_titulos(day.get('titulos', ''))
+
+        # Save results with partitioning and timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+        car_dir = os.path.join(EXTRACOES_DIR, 'car')
+        os.makedirs(car_dir, exist_ok=True)
+        
+        filename = f"car_{timestamp}.json"
+        filepath = os.path.join(car_dir, filename)
+        
+        with open(filepath, 'w', encoding='utf-8') as f:
             json.dump(all_results, f, ensure_ascii=False, indent=2)
-        logger.info(f"Saved combined file with {len(all_results)} extractions to calendarioCar.json")
+        logger.info(f"Saved combined file with {len(all_results)} extractions to car/{filename}")
 
         logger.add_context("total_extractions", len(all_results))
         success = True

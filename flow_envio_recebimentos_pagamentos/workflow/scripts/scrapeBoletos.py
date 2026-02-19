@@ -1,6 +1,7 @@
 import asyncio
 import os
 import sys
+from datetime import datetime
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 
@@ -51,10 +52,23 @@ async def main():
         await portal.fill_dates(start_date, end_date)
         await portal.click_filtrar()
 
-        # Export to JSON
-        os.makedirs(EXTRACOES_DIR, exist_ok=True)
-        filepath = await portal.export_to_json(EXTRACOES_DIR)
-        logger.info(f"Extraction complete: {filepath}")
+        # Export to JSON with partitioning and timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+        boletos_dir = os.path.join(EXTRACOES_DIR, 'boletos')
+        os.makedirs(boletos_dir, exist_ok=True)
+
+        # export_to_json currently saves as portalBoletos.json in the target dir
+        temp_filepath = await portal.export_to_json(boletos_dir)
+
+        filename = f"boletos_{timestamp}.json"
+        dest_filepath = os.path.join(boletos_dir, filename)
+
+        # Rename to include timestamp
+        if os.path.exists(temp_filepath):
+            os.rename(temp_filepath, dest_filepath)
+            logger.info(f"Extraction complete: boletos/{filename}")
+        else:
+            logger.error(f"Failed to find exported file at {temp_filepath}")
 
         success = True
 

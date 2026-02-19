@@ -10,6 +10,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../'
 from dotenv import load_dotenv
 from workflow.components.navegador import Navegador
 from workflow.components.wide_logger import WideLogger
+from workflow.components.data_cleaners import parse_brl
 from workflow.pages.moozCartoes import MoozCartoesPage
 
 load_dotenv()
@@ -73,18 +74,23 @@ async def main():
             # Navigate back to selection for next iteration
             await mooz_page.navigate_to_select_merchant()
             
-        # Save results (temporary structure)
-        data = all_data
+        # Clean financial data: add numeric 'value_num' field
+        for entry in all_data:
+            for day in entry.get('days', []):
+                day['value_num'] = parse_brl(day.get('value', ''))
+
+        # Save results with partitioning and timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+        mooz_dir = os.path.join(EXTRACOES_DIR, 'mooz')
+        os.makedirs(mooz_dir, exist_ok=True)
         
-        # Save results
-        os.makedirs(EXTRACOES_DIR, exist_ok=True)
-        filename = "portalMooz.json"
-        filepath = os.path.join(EXTRACOES_DIR, filename)
+        filename = f"mooz_{timestamp}.json"
+        filepath = os.path.join(mooz_dir, filename)
         
         with open(filepath, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+            json.dump(all_data, f, ensure_ascii=False, indent=2)
             
-        logger.info(f"Saved data to {filename}")
+        logger.info(f"Saved data to mooz/{filename}")
         success = True
 
     except Exception as e:
