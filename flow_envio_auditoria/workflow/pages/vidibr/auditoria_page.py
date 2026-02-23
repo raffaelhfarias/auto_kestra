@@ -150,26 +150,24 @@ class VidibrAuditoriaPage(BasePage):
         except Exception as e:
             logger.debug(f"'Ver mais' não encontrado ou já expandido: {e}")
 
-        # === PASSO 3: Aguardar .box-pergunta carregar ===
+        # === PASSO 3: Tentar extrair detalhes do .box-pergunta ===
+        info = {}
+        info['Local visitado'] = local_nome
+        
         box = self.page.locator(".box-pergunta").first
         
         try:
             await box.wait_for(timeout=30000)
             logger.info(".box-pergunta encontrado!")
-        except Exception as err:
-            logger.warning(f".box-pergunta não encontrado. URL: {self.page.url}")
-            try:
-                body_text = await self.page.locator("body").inner_text()
-                logger.info(f"Conteúdo visível (primeiros 500 chars): {body_text[:500]}")
-            except Exception:
-                pass
-            raise err
+        except Exception:
+            # .box-pergunta não encontrado — retorna apenas o local do filtro
+            logger.warning(f".box-pergunta não encontrado, retornando apenas local do filtro.")
+            logger.info(f"Detalhes parciais extraídos: Local = {local_nome}")
+            return info
 
-        # === PASSO 4: Extrair informações ===
-        info = {}
+        # === PASSO 4: Extrair informações completas ===
         
-        # Local visitado (do filtro, ou do elemento da página)
-        info['Local visitado'] = local_nome
+        # Local visitado (prefere o elemento da página se existir)
         local_el = self.page.locator('[data-cy="abrirQuestionarioJob"]')
         if await local_el.count() > 0:
             info['Local visitado'] = (await local_el.text_content()).strip()
@@ -198,3 +196,4 @@ class VidibrAuditoriaPage(BasePage):
 
         logger.info("Detalhes extraídos com sucesso!")
         return info
+
