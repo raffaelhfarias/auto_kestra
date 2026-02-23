@@ -51,13 +51,13 @@ class FormatadorWhatsapp:
         # Queremos o formato "23/02/2026 | 14:42"
         match_dt = re.search(r'(\d{2}/\d{2}/\d{4})[^\d]*(\d{2}:\d{2})', data_atualizacao_raw)
         if match_dt:
-            data_hora = f"{match_dt.group(1)} | {match_dt.group(2)}"
+            data_hora = f"{match_dt.group(1)} {match_dt.group(2)}"
         else:
             # Fallback
             if data_atualizacao_raw != "N/D" and data_atualizacao_raw:
                 data_hora = data_atualizacao_raw
             else:
-                data_hora = time.strftime("%d/%m/%Y | %H:%M", time.localtime())
+                data_hora = time.strftime("%d/%m/%Y %H:%M", time.localtime())
         
         # --- PANORAMA ---
         panorama = dados.get("panorama", {})
@@ -166,11 +166,11 @@ class FormatadorWhatsapp:
 
         # Montagem do Template Final (WhatsApp usa *texto* para negrito)
         msg = f"""*Resumo IAF*
-{data_hora}
+ Dashboard atualizado em: {data_hora}
 
 *STATUS ATUAL:* {pontuacao}
-🎯 Atingimento: {atingimento}
-🏆 Classificação: {classificacao}
+Atingimento: {atingimento}
+Classificação: {classificacao_raw}
 
 *ONDE ESTAMOS:*
 🇧🇷 Brasil: {br} | 🌎 Região: {reg} | 🏢 Clube: {clube}
