@@ -13,7 +13,7 @@ class VidibrAuditoriaPage(BasePage):
         self.btn_avaliacoes = page.locator("button[data-cy='avaliacoes-realizadas']")
         
         # Elementos do Pop-up de Jobs / Diálogos
-        self.dialog_wrapper = page.locator(".alert-wrapper")
+        self.dialog_wrapper = page.locator(".alert-radio-group")
         self.radio_labels = page.locator(".alert-radio-label")
         self.btn_ok = page.locator("button.alert-button").filter(has_text="OK")
         
@@ -80,37 +80,45 @@ class VidibrAuditoriaPage(BasePage):
         await self.filtro_local.first.click()
         logger.info("Filtro de local clicado.")
         
-        # Aguarda o diálogo de seleção de local aparecer
+        # Aguarda o grupo de rádios de seleção de local aparecer
         await asyncio.sleep(1)
-        await self.dialog_wrapper.wait_for(state="visible", timeout=10000)
+        radio_group = self.page.locator(".alert-radio-group")
+        await radio_group.wait_for(state="visible", timeout=10000)
         
-        # Lista os locais disponíveis (excluindo 'Todos')
-        labels = await self.radio_labels.all_text_contents()
-        locais = [t.strip() for t in labels if t and t.strip().lower() != 'todos']
+        # Itera sobre os botões de rádio para encontrar o primeiro que não seja 'Todos'
+        radios = self.page.locator("button.alert-radio")
+        count = await radios.count()
         
-        if not locais:
+        local_selecionado = ""
+        radio_alvo = None
+        
+        for i in range(count):
+            r = radios.nth(i)
+            label_text = await r.locator(".alert-radio-label").text_content()
+            if label_text and label_text.strip().lower() != 'todos':
+                local_selecionado = label_text.strip()
+                radio_alvo = r
+                break
+        
+        if not radio_alvo:
             logger.warning("Nenhum local encontrado no filtro.")
             await self.btn_ok.click()
             await asyncio.sleep(1)
             return ''
         
-        local_selecionado = locais[0]
         logger.info(f"Selecionando local mais recente: {local_selecionado[:70]}...")
         
-        # Clica no radio button do local
-        radio = self.page.locator("button.alert-radio").filter(
-            has=self.page.locator(".alert-radio-label", has_text=local_selecionado)
-        )
-        await radio.click()
+        # Clica no radio button do local encontrado
+        await radio_alvo.click()
         await asyncio.sleep(0.5)
         
         # Confirma seleção
         logger.info("Confirmando seleção do local (OK)...")
         await self.btn_ok.click()
         
-        # Aguarda o diálogo fechar
+        # Aguarda o diálogo fechar (esperamos o radio_group desaparecer)
         try:
-            await self.dialog_wrapper.wait_for(state="hidden", timeout=10000)
+            await radio_group.wait_for(state="hidden", timeout=10000)
             logger.info("Diálogo de local fechado.")
         except Exception:
             logger.warning("Diálogo de local pode não ter fechado completamente.")
