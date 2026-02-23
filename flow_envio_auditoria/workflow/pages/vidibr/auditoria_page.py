@@ -51,8 +51,22 @@ class VidibrAuditoriaPage(BasePage):
         logger.info("Confirmando seleção (OK)...")
         await self.btn_ok.click()
         
-        # POST_CLICK_DELAY de 2 segundos (CRÍTICO - seguindo modelo)
-        await asyncio.sleep(2)
+        # Aguarda o diálogo fechar antes de prosseguir
+        try:
+            await self.dialog_wrapper.wait_for(state="hidden", timeout=10000)
+            logger.info("Diálogo de seleção fechado.")
+        except Exception:
+            logger.warning("Diálogo pode não ter fechado completamente, continuando...")
+        
+        # Aguarda a página carregar o conteúdo do formulário selecionado
+        logger.info("Aguardando carregamento da página do formulário...")
+        try:
+            await self.page.wait_for_load_state("networkidle", timeout=30000)
+        except Exception:
+            logger.warning("Timeout em networkidle, tentando continuar...")
+        
+        # POST_CLICK_DELAY adicional para garantir renderização
+        await asyncio.sleep(3)
 
     def _limpar_prefixo(self, texto: str, prefixo: str) -> str:
         """Remove o prefixo do valor extraído."""
@@ -63,6 +77,7 @@ class VidibrAuditoriaPage(BasePage):
     async def extrair_detalhes(self) -> Dict[str, str]:
         """Extrai detalhes do formulário usando seletores do modelo."""
         logger.info("Iniciando extração de detalhes...")
+        logger.info(f"URL atual: {self.page.url}")
         
         # Expande "Ver mais" para mostrar o nome completo da Loja
         try:
@@ -75,9 +90,36 @@ class VidibrAuditoriaPage(BasePage):
         except Exception as e:
             logger.debug(f"'Ver mais' não encontrado ou já expandido: {e}")
 
-        # Aguarda o box carregar (WAIT_TIMEOUT = 15s como no modelo)
+        # Aguarda o box carregar com timeout maior e retry
         box = self.page.locator(".box-pergunta").first
-        await box.wait_for(timeout=15000)
+        
+        try:
+            await box.wait_for(timeout=45000)
+        except Exception as first_err:
+            # Se falhou, pode ser que a página ainda esteja carregando
+            # Tenta aguardar networkidle e tentar novamente
+            logger.warning(f"Primeiro wait falhou, tentando recuperar... URL: {self.page.url}")
+            
+            # Captura HTML parcial para diagnóstico
+            try:
+                body_text = await self.page.locator("body").inner_text()
+                logger.info(f"Conteúdo visível (primeiros 500 chars): {body_text[:500]}")
+            except Exception:
+                pass
+            
+            try:
+                await self.page.wait_for_load_state("networkidle", timeout=15000)
+                await asyncio.sleep(3)
+                await box.wait_for(timeout=30000)
+            except Exception:
+                logger.error(f"box-pergunta não encontrado após retry. URL: {self.page.url}")
+                # Tenta seletores alternativos antes de desistir
+                alt_box = self.page.locator(".box-pergunta, .questionario-container, ion-card").first
+                try:
+                    await alt_box.wait_for(timeout=10000)
+                    logger.info("Encontrado via seletor alternativo.")
+                except Exception:
+                    raise first_err
 
         info = {}
         

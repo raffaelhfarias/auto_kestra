@@ -56,9 +56,20 @@ class AuditoriaOrquestrador:
                 resultado.update({"status": "primeiro_registro", "formulario": formulario_atual})
             elif formulario_atual != ultimo_visto:
                 logger.info(f"Nova auditoria detectada: {formulario_atual}")
-                await auditoria.selecionar_formulario_e_entrar(formulario_atual)
-                detalhes = await auditoria.extrair_detalhes()
+                
+                # Salvar o estado ANTES de tentar extrair detalhes
+                # para que, se falhar, na próxima execução não tente novamente
                 with open(LAST_FORM_FILE, "w", encoding="utf-8") as f: f.write(formulario_atual)
+                
+                # Tentar extrair detalhes, mas não falhar se não conseguir
+                detalhes = {}
+                try:
+                    await auditoria.selecionar_formulario_e_entrar(formulario_atual)
+                    detalhes = await auditoria.extrair_detalhes()
+                    logger.info("Detalhes extraídos com sucesso!")
+                except Exception as extract_err:
+                    logger.warning(f"Não foi possível extrair detalhes, enviando apenas o nome: {extract_err}")
+                
                 resultado.update({
                     "status": "novo_formulario",
                     "formulario": formulario_atual,
