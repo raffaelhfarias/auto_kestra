@@ -97,6 +97,12 @@ async def main():
     load_dotenv()
     usuario = os.environ.get("EXTRANET_USER")
     senha = os.environ.get("EXTRANET_PASS")
+    last_sent = os.environ.get("IAF_LAST_SENT", "")
+
+    hoje_str = datetime.now().strftime("%Y-%m-%d")
+    if last_sent == hoje_str:
+        logger.info(f"✅ O resumo do IAF já foi enviado hoje ({hoje_str}). O fluxo será abortado (exit 1) para não enviar novamente.")
+        sys.exit(1)
 
     if not usuario or not senha:
         wide_event["status"] = "error"
