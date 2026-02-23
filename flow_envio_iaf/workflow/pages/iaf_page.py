@@ -5,6 +5,7 @@ Extrai dados de Panorama, Pilares e Indicadores do Programa.
 
 import logging
 import time
+import re
 from playwright.async_api import Page
 
 logger = logging.getLogger(__name__)
@@ -230,11 +231,20 @@ class IAFPage:
     @staticmethod
     def gerar_markdown(dados: dict) -> str:
         """Gera um arquivo Markdown estruturado a partir dos dados extraídos."""
-        ts = time.strftime("%d/%m/%Y %H:%M", time.localtime())
+        data_atualizacao_raw = dados.get("data_atualizacao", "N/D")
+        match_dt = re.search(r'(\d{2}/\d{2}/\d{4})[^\d]*(\d{2}:\d{2})', data_atualizacao_raw)
+        if match_dt:
+            data_hora = f"{match_dt.group(1)} {match_dt.group(2)}"
+        else:
+            if data_atualizacao_raw != "N/D" and data_atualizacao_raw:
+                data_hora = data_atualizacao_raw
+            else:
+                data_hora = time.strftime("%d/%m/%Y %H:%M", time.localtime())
+
         linhas = []
 
         linhas.append(f"# Resumo IAF Consolidado")
-        linhas.append(f"> Extraído automaticamente em {ts}")
+        linhas.append(f"> Dashboard atualizado em: {data_hora}")
         linhas.append("")
 
         # Panorama
