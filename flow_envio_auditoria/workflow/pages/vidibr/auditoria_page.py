@@ -12,10 +12,13 @@ class VidibrAuditoriaPage(BasePage):
         # Botão principal da Home usando data-cy
         self.btn_avaliacoes = page.locator("button[data-cy='avaliacoes-realizadas']")
         
-        # Elementos do Pop-up de Jobs
+        # Elementos do Pop-up de Jobs / Diálogos
         self.dialog_wrapper = page.locator(".alert-wrapper")
         self.radio_labels = page.locator(".alert-radio-label")
         self.btn_ok = page.locator("button.alert-button").filter(has_text="OK")
+        
+        # Filtro de local (ion-select na página do formulário)
+        self.filtro_local = page.locator("button.item-cover[aria-haspopup='true']")
 
     async def abrir_selecao_jobs(self):
         logger.info("Abrindo seleção de Avaliações Realizadas...")
@@ -68,6 +71,61 @@ class VidibrAuditoriaPage(BasePage):
         # POST_CLICK_DELAY adicional para garantir renderização
         await asyncio.sleep(3)
 
+    async def selecionar_local_mais_recente(self) -> str:
+        """Clica no filtro de local e seleciona o espaço mais recente (excluindo 'Todos')."""
+        logger.info("Abrindo filtro de local...")
+        
+        # Aguarda o filtro de local aparecer na página
+        await self.filtro_local.first.wait_for(state="visible", timeout=15000)
+        await self.filtro_local.first.click()
+        logger.info("Filtro de local clicado.")
+        
+        # Aguarda o diálogo de seleção de local aparecer
+        await asyncio.sleep(1)
+        await self.dialog_wrapper.wait_for(state="visible", timeout=10000)
+        
+        # Lista os locais disponíveis (excluindo 'Todos')
+        labels = await self.radio_labels.all_text_contents()
+        locais = [t.strip() for t in labels if t and t.strip().lower() != 'todos']
+        
+        if not locais:
+            logger.warning("Nenhum local encontrado no filtro.")
+            await self.btn_ok.click()
+            await asyncio.sleep(1)
+            return ''
+        
+        local_selecionado = locais[0]
+        logger.info(f"Selecionando local mais recente: {local_selecionado[:70]}...")
+        
+        # Clica no radio button do local
+        radio = self.page.locator("button.alert-radio").filter(
+            has=self.page.locator(".alert-radio-label", has_text=local_selecionado)
+        )
+        await radio.click()
+        await asyncio.sleep(0.5)
+        
+        # Confirma seleção
+        logger.info("Confirmando seleção do local (OK)...")
+        await self.btn_ok.click()
+        
+        # Aguarda o diálogo fechar
+        try:
+            await self.dialog_wrapper.wait_for(state="hidden", timeout=10000)
+            logger.info("Diálogo de local fechado.")
+        except Exception:
+            logger.warning("Diálogo de local pode não ter fechado completamente.")
+        
+        # Aguarda carregamento do conteúdo do local selecionado
+        try:
+            await self.page.wait_for_load_state("networkidle", timeout=30000)
+        except Exception:
+            logger.warning("Timeout em networkidle após seleção de local.")
+        
+        await asyncio.sleep(3)
+        
+        logger.info(f"Local selecionado com sucesso: {local_selecionado[:70]}")
+        return local_selecionado
+
     def _limpar_prefixo(self, texto: str, prefixo: str) -> str:
         """Remove o prefixo do valor extraído."""
         if texto.lower().startswith(prefixo.lower()):
@@ -79,9 +137,11 @@ class VidibrAuditoriaPage(BasePage):
         logger.info("Iniciando extração de detalhes...")
         logger.info(f"URL atual: {self.page.url}")
         
-        # Expande "Ver mais" para mostrar o nome completo da Loja
+        # === PASSO 1: Selecionar o local mais recente no filtro ===
+        local_nome = await self.selecionar_local_mais_recente()
+        
+        # === PASSO 2: Expandir "Ver mais" se disponível ===
         try:
-            # Seletor direto pelo texto do link
             ver_mais = self.page.locator("a").filter(has_text="Ver mais")
             if await ver_mais.count() > 0:
                 logger.info("Clicando em 'Ver mais' para expandir detalhes...")
@@ -90,42 +150,29 @@ class VidibrAuditoriaPage(BasePage):
         except Exception as e:
             logger.debug(f"'Ver mais' não encontrado ou já expandido: {e}")
 
-        # Aguarda o box carregar com timeout maior e retry
+        # === PASSO 3: Aguardar .box-pergunta carregar ===
         box = self.page.locator(".box-pergunta").first
         
         try:
-            await box.wait_for(timeout=45000)
-        except Exception as first_err:
-            # Se falhou, pode ser que a página ainda esteja carregando
-            # Tenta aguardar networkidle e tentar novamente
-            logger.warning(f"Primeiro wait falhou, tentando recuperar... URL: {self.page.url}")
-            
-            # Captura HTML parcial para diagnóstico
+            await box.wait_for(timeout=30000)
+            logger.info(".box-pergunta encontrado!")
+        except Exception as err:
+            logger.warning(f".box-pergunta não encontrado. URL: {self.page.url}")
             try:
                 body_text = await self.page.locator("body").inner_text()
                 logger.info(f"Conteúdo visível (primeiros 500 chars): {body_text[:500]}")
             except Exception:
                 pass
-            
-            try:
-                await self.page.wait_for_load_state("networkidle", timeout=15000)
-                await asyncio.sleep(3)
-                await box.wait_for(timeout=30000)
-            except Exception:
-                logger.error(f"box-pergunta não encontrado após retry. URL: {self.page.url}")
-                # Tenta seletores alternativos antes de desistir
-                alt_box = self.page.locator(".box-pergunta, .questionario-container, ion-card").first
-                try:
-                    await alt_box.wait_for(timeout=10000)
-                    logger.info("Encontrado via seletor alternativo.")
-                except Exception:
-                    raise first_err
+            raise err
 
+        # === PASSO 4: Extrair informações ===
         info = {}
         
-        # Local visitado
+        # Local visitado (do filtro, ou do elemento da página)
+        info['Local visitado'] = local_nome
         local_el = self.page.locator('[data-cy="abrirQuestionarioJob"]')
-        info['Local visitado'] = (await local_el.text_content()).strip() if await local_el.count() > 0 else ''
+        if await local_el.count() > 0:
+            info['Local visitado'] = (await local_el.text_content()).strip()
 
         # Campos com strong labels (lista do modelo)
         campos_strong = ['CNPJ', 'Endereço', 'Período', 'Número do QT', 
