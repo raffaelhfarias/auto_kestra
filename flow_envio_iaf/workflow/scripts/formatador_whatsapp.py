@@ -44,8 +44,20 @@ class FormatadorWhatsapp:
 
     @staticmethod
     def formatar(dados: dict) -> str:
-        # Data e Hora
-        data_hora = time.strftime("%d/%m/%Y | %H:%M", time.localtime())
+        # Data e Hora de Atualização
+        data_atualizacao_raw = dados.get("data_atualizacao", "N/D")
+        
+        # O formato bruto geralmente é "23/02/2026, às 14:42:06"
+        # Queremos o formato "23/02/2026 | 14:42"
+        match_dt = re.search(r'(\d{2}/\d{2}/\d{4})[^\d]*(\d{2}:\d{2})', data_atualizacao_raw)
+        if match_dt:
+            data_hora = f"{match_dt.group(1)} | {match_dt.group(2)}"
+        else:
+            # Fallback
+            if data_atualizacao_raw != "N/D" and data_atualizacao_raw:
+                data_hora = data_atualizacao_raw
+            else:
+                data_hora = time.strftime("%d/%m/%Y | %H:%M", time.localtime())
         
         # --- PANORAMA ---
         panorama = dados.get("panorama", {})

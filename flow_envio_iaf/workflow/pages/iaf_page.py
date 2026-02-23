@@ -23,6 +23,20 @@ class IAFPage:
         await self.page.wait_for_timeout(2000)
         logger.info("Tabela de indicadores carregada.")
 
+    async def extrair_data_atualizacao(self) -> str:
+        """Extrai a data de atualização exibida no dashboard IAF."""
+        logger.info("Extraindo data de atualização...")
+        try:
+            seletor = "span.sc-dlWCHZ"
+            await self.page.wait_for_selector(seletor, timeout=5000)
+            elemento = self.page.locator(seletor).first
+            texto = await elemento.inner_text()
+            logger.info(f"Data de atualização extraída: '{texto.strip()}'")
+            return texto.strip()
+        except Exception as e:
+            logger.warning(f"Erro ao extrair data de atualização: {e}")
+            return "N/D"
+
     async def extrair_panorama(self) -> dict:
         """Extrai os dados da seção Panorama (pontuação, classificação, rankings)."""
         logger.info("Extraindo dados do Panorama...")
@@ -205,6 +219,7 @@ class IAFPage:
         await self.aguardar_carregamento()
 
         dados = {
+            "data_atualizacao": await self.extrair_data_atualizacao(),
             "panorama": await self.extrair_panorama(),
             "pilares": await self.extrair_pilares(),
             "indicadores": await self.extrair_indicadores(),
