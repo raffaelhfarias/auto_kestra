@@ -1,0 +1,5 @@
+playwright==1.57.0
+python-dotenv
+asyncio
+requests
+pyotp
