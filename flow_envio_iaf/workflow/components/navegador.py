@@ -87,6 +87,15 @@ class Navegador:
         # Usa pagina existente ou cria nova
         self.page = self.context.pages[0] if self.context.pages else await self.context.new_page()
         self.page.set_default_timeout(60000)
+
+        # Força timezone do browser para America/Sao_Paulo via CDP
+        try:
+            cdp_session = await self.context.new_cdp_session(self.page)
+            await cdp_session.send("Emulation.setTimezoneOverride", {"timezoneId": "America/Sao_Paulo"})
+            logger.info("Timezone do browser forçado para America/Sao_Paulo via CDP.")
+        except Exception as e:
+            logger.warning(f"Não foi possível forçar timezone via CDP: {e}")
+
         return self.page
 
     def _build_cdp_url(self) -> str:

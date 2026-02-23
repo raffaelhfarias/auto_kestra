@@ -1,5 +1,5 @@
 # Resumo IAF Consolidado
-> Extraído automaticamente em 23/02/2026 12:26
+> Dashboard atualizado em: 23/02/2026 09:56
 
 ## Panorama
 - **Pontuação do CP:** 587,30 pts
