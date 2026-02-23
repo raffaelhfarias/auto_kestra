@@ -6,9 +6,11 @@ Repositório central para automações de extração de dados e auditoria, orque
 
 O repositório está dividido em módulos independentes, cada um com sua própria lógica de workflow, páginas (POM) e scripts:
 
-- **`flow_envio_auditoria/`**: Automação integrada com o portal X para monitoramento de auditorias e envio de notificações detalhadas via WhatsApp.
-- **`flow_envio_resultados/`**: Extração de indicadores de desempenho (Loja) e envio de resumos de metas e resultados.
-- **`flow_envio_resultados_vd/`**: Automação SGI via Browserless para extração de dados de vendas, renovação de sessão (cookies) e envio de resultados via WhatsApp.
+- **`flow_envio_auditoria/`**: Automação integrada com o portal VIDIBR para monitoramento de auditorias e envio de notificações detalhadas via WhatsApp.
+- **`flow_envio_iaf/`**: Extração de indicadores do Relatório IAF Trimestral (O Boticário) e envio de resumos formatados via WhatsApp (limite de um envio por dia via KV Store).
+- **`flow_envio_recebimentos_pagamentos/`**: Extração de relatórios financeiros e dados de liquidações para conciliação contábil via Mooz e e-commerce.
+- **`flow_envio_resultados/`**: Extração de indicadores de desempenho diário de Lojas e envio de resumos de metas frente aos resultados.
+- **`flow_envio_resultados_vd/`**: Automação SGI via Browserless para extração paralela de dados de venda direta (VD), renovação persistente de cookies e envio por WhatsApp.
 
 ## 🛠️ Stack Tecnológica
 
