@@ -17,8 +17,14 @@ class VidibrAuditoriaPage(BasePage):
         self.radio_labels = page.locator(".alert-radio-label")
         self.btn_ok = page.locator("button.alert-button").filter(has_text="OK")
         
-        # Filtro de local (ion-select na página do formulário)
-        self.filtro_local = page.locator("button.item-cover[aria-haspopup='true']")
+        # Filtro de local - múltiplos seletores possíveis para Ionic
+        # A ordem de tentativa é: ion-select, .select-text, button.item-cover
+        self._filtro_local_seletores = [
+            "ion-select",
+            ".select-text",
+            "button.item-cover[aria-haspopup='true']",
+            "ion-item button",
+        ]
 
     async def abrir_selecao_jobs(self):
         logger.info("Abrindo seleção de Avaliações Realizadas...")
@@ -71,23 +77,74 @@ class VidibrAuditoriaPage(BasePage):
         # POST_CLICK_DELAY adicional para garantir renderização
         await asyncio.sleep(3)
 
+    async def _tentar_abrir_filtro_local(self) -> bool:
+        """Tenta abrir o dropdown de filtro de local usando múltiplos seletores."""
+        for seletor in self._filtro_local_seletores:
+            loc = self.page.locator(seletor)
+            count = await loc.count()
+            logger.info(f"Tentando seletor '{seletor}' -> {count} elemento(s) encontrado(s)")
+            
+            if count == 0:
+                continue
+            
+            # Tenta clicar em cada elemento encontrado até o dropdown abrir
+            for idx in range(min(count, 3)):  # no máximo 3 tentativas por seletor
+                try:
+                    el = loc.nth(idx)
+                    # Verifica se o elemento está visível
+                    if not await el.is_visible():
+                        logger.debug(f"  Elemento {idx} de '{seletor}' não visível, pulando.")
+                        continue
+                    
+                    tag = await el.evaluate("el => el.tagName")
+                    text = await el.evaluate("el => el.textContent?.substring(0, 80) || ''")
+                    logger.info(f"  Clicando elemento {idx}: <{tag}> texto='{text.strip()}'")
+                    
+                    await el.click()
+                    await asyncio.sleep(1.5)
+                    
+                    # Verifica se o dropdown de rádios apareceu
+                    radio_group = self.page.locator(".alert-radio-group")
+                    if await radio_group.is_visible():
+                        logger.info(f"  ✓ Dropdown aberto com sucesso via '{seletor}' idx={idx}!")
+                        return True
+                    else:
+                        logger.info(f"  ✗ Dropdown não apareceu após clicar '{seletor}' idx={idx}")
+                except Exception as e:
+                    logger.debug(f"  Erro ao clicar '{seletor}' idx={idx}: {e}")
+        
+        return False
+
     async def selecionar_local_mais_recente(self) -> str:
         """Clica no filtro de local e seleciona o espaço mais recente (excluindo 'Todos')."""
         logger.info("Abrindo filtro de local...")
         
-        # Aguarda o filtro de local aparecer na página
-        await self.filtro_local.first.wait_for(state="visible", timeout=15000)
-        await self.filtro_local.first.click()
-        logger.info("Filtro de local clicado.")
+        # Aguarda a página estabilizar
+        await asyncio.sleep(2)
         
-        # Aguarda o grupo de rádios de seleção de local aparecer
-        await asyncio.sleep(1)
-        radio_group = self.page.locator(".alert-radio-group")
-        await radio_group.wait_for(state="visible", timeout=10000)
+        # Debug: lista elementos visíveis na página para diagnóstico
+        try:
+            ion_selects = await self.page.locator("ion-select").count()
+            item_covers = await self.page.locator("button.item-cover").count()
+            select_texts = await self.page.locator(".select-text").count()
+            ion_items = await self.page.locator("ion-item").count()
+            logger.info(f"Debug DOM: ion-select={ion_selects}, button.item-cover={item_covers}, .select-text={select_texts}, ion-item={ion_items}")
+        except Exception as e:
+            logger.debug(f"Debug DOM falhou: {e}")
+        
+        # Tenta abrir o dropdown de local com múltiplos seletores
+        dropdown_aberto = await self._tentar_abrir_filtro_local()
+        
+        if not dropdown_aberto:
+            logger.warning("Não foi possível abrir o dropdown de filtro de local com nenhum seletor.")
+            return ''
+        
+        logger.info("Filtro de local aberto com sucesso!")
         
         # Itera sobre os botões de rádio para encontrar o primeiro que não seja 'Todos'
         radios = self.page.locator("button.alert-radio")
         count = await radios.count()
+        logger.info(f"Botões de rádio no dropdown de local: {count}")
         
         local_selecionado = ""
         radio_alvo = None
@@ -95,6 +152,7 @@ class VidibrAuditoriaPage(BasePage):
         for i in range(count):
             r = radios.nth(i)
             label_text = await r.locator(".alert-radio-label").text_content()
+            logger.debug(f"  Radio {i}: '{label_text.strip() if label_text else ''}'")
             if label_text and label_text.strip().lower() != 'todos':
                 local_selecionado = label_text.strip()
                 radio_alvo = r
@@ -116,8 +174,9 @@ class VidibrAuditoriaPage(BasePage):
         logger.info("Confirmando seleção do local (OK)...")
         await self.btn_ok.click()
         
-        # Aguarda o diálogo fechar (esperamos o radio_group desaparecer)
+        # Aguarda o diálogo fechar
         try:
+            radio_group = self.page.locator(".alert-radio-group")
             await radio_group.wait_for(state="hidden", timeout=10000)
             logger.info("Diálogo de local fechado.")
         except Exception:
