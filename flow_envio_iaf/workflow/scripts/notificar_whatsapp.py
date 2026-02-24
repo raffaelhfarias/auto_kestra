@@ -18,6 +18,7 @@ EVOLUTION_API_URL = os.environ.get("EVOLUTION_API_URL")
 EVOLUTION_API_KEY = os.environ.get("EVOLUTION_API_KEY")
 EVOLUTION_INSTANCE = os.environ.get("EVOLUTION_INSTANCE")
 WHATSAPP_ID_EDGAR = os.environ.get("WHATSAPP_ID_EDGAR")
+WHATSAPP_ID_PRISCILA = os.environ.get("WHATSAPP_ID_PRISCILA")
 
 
 def carregar_mensagem(caminho: str = "mensagem_whatsapp.txt") -> str:
@@ -41,7 +42,7 @@ def enviar_para_whatsapp(mensagem: str, destinatario: str):
         return False
 
     if not destinatario:
-        logger.error("Destinatário não configurado (WHATSAPP_ID_EDGAR).")
+        logger.error("Destinatário não configurado.")
         return False
 
     url = f"{EVOLUTION_API_URL}message/sendText/{EVOLUTION_INSTANCE}"
@@ -83,12 +84,24 @@ if __name__ == "__main__":
 
     logger.info(f"Prévia da mensagem:\n{mensagem}")
 
-    sucesso = enviar_para_whatsapp(mensagem, WHATSAPP_ID_EDGAR)
+    destinatarios = [
+        ("Edgar", WHATSAPP_ID_EDGAR),
+        ("Priscila", WHATSAPP_ID_PRISCILA)
+    ]
 
-    if sucesso:
-        logger.info("--- Notificação enviada com sucesso! ---")
+    sucessos = 0
+    for nome, numero in destinatarios:
+        if numero:
+            logger.info(f"Iniciando envio para {nome}...")
+            if enviar_para_whatsapp(mensagem, numero):
+                sucessos += 1
+        else:
+            logger.warning(f"Número não configurado para {nome}.")
+
+    if sucessos > 0:
+        logger.info("--- Notificações enviadas com sucesso! ---")
     else:
-        logger.error("--- Falha no envio da notificação ---")
+        logger.error("--- Falha no envio das notificações ---")
         sys.exit(1)
 
     logger.info("--- Fim do Processamento ---")
