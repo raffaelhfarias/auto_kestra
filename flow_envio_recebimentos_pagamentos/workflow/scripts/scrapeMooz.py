@@ -79,18 +79,16 @@ async def main():
             for day in entry.get('days', []):
                 day['value_num'] = parse_brl(day.get('value', ''))
 
-        # Save results with partitioning and timestamp
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+        # Save results (overwrites single file for Power BI compatibility)
         mooz_dir = os.path.join(EXTRACOES_DIR, 'mooz')
         os.makedirs(mooz_dir, exist_ok=True)
         
-        filename = f"mooz_{timestamp}.json"
-        filepath = os.path.join(mooz_dir, filename)
+        filepath = os.path.join(mooz_dir, "mooz.json")
         
         with open(filepath, 'w', encoding='utf-8') as f:
             json.dump(all_data, f, ensure_ascii=False, indent=2)
             
-        logger.info(f"Saved data to mooz/{filename}")
+        logger.info(f"Saved data to mooz/mooz.json (overwritten)")
         success = True
 
     except Exception as e:

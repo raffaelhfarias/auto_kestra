@@ -2,7 +2,7 @@ import asyncio
 import json
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, date
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 
@@ -15,6 +15,52 @@ from workflow.pages.calendarioCar import CalendarioCarPage, CS_CODES, MESES
 load_dotenv()
 
 EXTRACOES_DIR = os.path.join(os.path.dirname(__file__), '../../extracoes')
+
+
+def fix_scheduled_status(entries: list[dict], logger: WideLogger) -> int:
+    """
+    Corrects dates that the CAR system incorrectly reports as SCHEDULED
+    when the date has already passed (should be TRANSFERRED).
+
+    The CAR calendar has a known bug where certain past dates remain
+    with status 'SCHEDULED' instead of being updated to 'TRANSFERRED'.
+    This function compares each day's date against today and fixes the status.
+
+    Args:
+        entries: List of extraction result dicts containing 'days' lists.
+        logger: Logger instance for reporting corrections.
+
+    Returns:
+        Number of corrections applied.
+    """
+    today = date.today()
+    corrections = 0
+
+    for entry in entries:
+        for day in entry.get("days", []):
+            day_status = day.get("status", "")
+            day_date_str = day.get("date", "")
+
+            if day_status != "SCHEDULED" or not day_date_str:
+                continue
+
+            try:
+                # Date format in the JSON: "dd-mm-yyyy"
+                day_date = datetime.strptime(day_date_str, "%d-%m-%Y").date()
+            except ValueError:
+                logger.error(f"Could not parse date '{day_date_str}', skipping correction.")
+                continue
+
+            if day_date < today:
+                day["status"] = "TRANSFERRED"
+                day["status_corrected"] = True
+                corrections += 1
+                logger.info(
+                    f"Corrected status for {day_date_str}: SCHEDULED → TRANSFERRED "
+                    f"(value: {day.get('value', 'N/A')})"
+                )
+
+    return corrections
 
 
 async def main():
@@ -76,9 +122,6 @@ async def main():
 
                 all_results.append(data)
 
-                all_results.append(data)
-                # Individual file saving removed as requested
-
         # Clean financial data: add numeric fields
         for entry in all_results:
             entry['total_recebimentos_num'] = parse_brl(entry.get('total_recebimentos', ''))
@@ -87,19 +130,25 @@ async def main():
                 day['value_num'] = parse_brl(day.get('value', ''))
                 day['titulos_num'] = parse_titulos(day.get('titulos', ''))
 
-        # Save results with partitioning and timestamp
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+        # Fix CAR calendar bug: SCHEDULED on past dates → TRANSFERRED
+        corrections = fix_scheduled_status(all_results, logger)
+        if corrections > 0:
+            logger.info(f"Applied {corrections} status correction(s) for past dates.")
+        else:
+            logger.info("No status corrections needed.")
+
+        # Save results (overwrites single file for Power BI compatibility)
         car_dir = os.path.join(EXTRACOES_DIR, 'car')
         os.makedirs(car_dir, exist_ok=True)
         
-        filename = f"car_{timestamp}.json"
-        filepath = os.path.join(car_dir, filename)
+        filepath = os.path.join(car_dir, "car.json")
         
         with open(filepath, 'w', encoding='utf-8') as f:
             json.dump(all_results, f, ensure_ascii=False, indent=2)
-        logger.info(f"Saved combined file with {len(all_results)} extractions to car/{filename}")
+        logger.info(f"Saved {len(all_results)} extractions to car/car.json (overwritten)")
 
         logger.add_context("total_extractions", len(all_results))
+        logger.add_context("status_corrections", corrections)
         success = True
 
     except Exception as e:
