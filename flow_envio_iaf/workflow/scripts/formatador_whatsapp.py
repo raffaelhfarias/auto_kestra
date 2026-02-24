@@ -166,7 +166,7 @@ class FormatadorWhatsapp:
 
         # Montagem do Template Final (WhatsApp usa *texto* para negrito)
         msg = f"""*Resumo IAF*
- Dashboard atualizado em: {data_hora}
+Dashboard atualizado em: {data_hora}
 
 *STATUS ATUAL:* {pontuacao}
 Atingimento: {atingimento}
