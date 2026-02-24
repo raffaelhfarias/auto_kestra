@@ -101,14 +101,16 @@ async def main():
 
     hoje_str = datetime.now().strftime("%Y-%m-%d")
     if last_sent == hoje_str:
-        logger.info(f"✅ O resumo do IAF já foi enviado hoje ({hoje_str}). O fluxo será abortado (exit 1) para não enviar novamente.")
-        sys.exit(1)
+        logger.info(f"✅ O resumo do IAF já foi enviado hoje ({hoje_str}). O fluxo não prosseguirá.")
+        print('::{"outputs": {"atualizado": false, "motivo": "ja_enviado"}}::')
+        sys.exit(0)
 
     if not usuario or not senha:
         wide_event["status"] = "error"
         wide_event["error"] = "Credenciais não encontradas no arquivo .env"
         logger.error(json.dumps(wide_event, indent=2, ensure_ascii=False))
-        sys.exit(1)
+        print('::{"outputs": {"atualizado": false, "motivo": "erro_credenciais"}}::')
+        sys.exit(0)
 
     navegador = Navegador()
     atualizado = False
@@ -146,12 +148,10 @@ async def main():
         
         logger.info(f"Wide Event Consolidado:\n{json.dumps(wide_event, indent=2, ensure_ascii=False)}")
 
-    # Exit code para uso em orquestração (Kestra, shell script, etc.)
-    # 0 = atualizado (pode prosseguir), 1 = não atualizado (aguardar)
-    if atualizado:
-        sys.exit(0)
-    else:
-        sys.exit(1)
+    # Informa ao Kestra o status para controle de fluxo
+    status_atualizado = "true" if atualizado else "false"
+    print(f'::{{ "outputs": {{ "atualizado": {status_atualizado} }} }}::')
+    sys.exit(0)
 
 
 if __name__ == "__main__":
