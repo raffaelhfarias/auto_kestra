@@ -173,7 +173,7 @@ Atingimento: {atingimento}
 Classificação: {classificacao_raw}
 
 *ONDE ESTAMOS:*
-🇧🇷 Brasil: {br} | 🌎 Região: {reg} | 🏢 Clube: {clube}
+Brasil: {br} | Região: {reg} | Clube: {clube}
 
 *PILARES EM DESTAQUE*
 {chr(10).join(texto_pilares)}
