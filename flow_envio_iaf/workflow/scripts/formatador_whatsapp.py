@@ -180,7 +180,7 @@ Dashboard atualizado em: {data_hora}
 
 *STATUS ATUAL:* {pontuacao}
 Atingimento: {atingimento}
-Classificação: {classificacao_raw}
+Classificação: {classificacao}
 
 *ONDE ESTAMOS:*
 Brasil: {br} | Região: {reg} | Clube: {clube}
