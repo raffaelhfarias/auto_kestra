@@ -64,7 +64,17 @@ class FormatadorWhatsapp:
         pontuacao = panorama.get("pontuacao_cp", "N/D")
         atingimento = panorama.get("classificacao_pct", "N/D")
         classificacao_raw = panorama.get("classificacao", "N/D")
-        classificacao = f"{classificacao_raw} ({atingimento})"
+        
+        # Emoji por classificação
+        emojis_classificacao = {
+            "Bronze": "🥉",
+            "Prata": "🥈",
+            "Ouro": "🥇",
+            "Diamante": "💎",
+            "Não Classificado": "⚪",
+        }
+        emoji_class = emojis_classificacao.get(classificacao_raw, "")
+        classificacao = f"{emoji_class} {classificacao_raw} ({atingimento})".strip()
             
         rankings = panorama.get("rankings", {})
         br = rankings.get("Brasil", "N/D")
