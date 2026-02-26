@@ -1,0 +1,30 @@
+2026-02-25 13:54:57 [INFO] MainOrchestrator: 📄 Log file: C:\Users\dados\rhfariasn\auto_kestra\flow_envio_recebimentos_pagamentos\log\execution_2026-02-25_13-54-57.log
+2026-02-25 13:54:57 [INFO] MainOrchestrator: === Starting Automated Extractions Orchestrator ===
+2026-02-25 13:54:57 [INFO] MainOrchestrator: Running scrapers sequentially (default mode)...
+2026-02-25 13:54:57 [INFO] MainOrchestrator: 🚀 Starting execution of ScrapeCar...
+2026-02-25 13:54:57 [INFO] workflow.components.navegador: Iniciando browser via Browserless (stealth=ON, headless=OFF)...
+2026-02-25 13:54:59 [INFO] workflow.components.navegador: Usando contexto default do Browserless (stealth preservado).
+2026-02-25 13:54:59 [INFO] workflow.components.navegador: Nenhum state.json encontrado. Sessao limpa.
+2026-02-25 13:59:12 [INFO] workflow.components.navegador: Browser encerrado com sucesso.
+2026-02-25 13:59:12 [INFO] MainOrchestrator: ✅ Successfully finished ScrapeCar in 255.33 seconds.
+2026-02-25 13:59:12 [INFO] MainOrchestrator: 🚀 Starting execution of ScrapeMooz...
+2026-02-25 13:59:12 [INFO] workflow.components.navegador: Iniciando browser via Browserless (stealth=ON, headless=OFF)...
+2026-02-25 13:59:14 [INFO] workflow.components.navegador: Usando contexto default do Browserless (stealth preservado).
+2026-02-25 13:59:14 [INFO] workflow.components.navegador: Nenhum state.json encontrado. Sessao limpa.
+2026-02-25 13:59:35 [INFO] workflow.components.navegador: Browser encerrado com sucesso.
+2026-02-25 13:59:35 [ERROR] MainOrchestrator: ❌ Error executing ScrapeMooz after 23.14 seconds: name 'current_month' is not defined
+Traceback (most recent call last):
+  File "C:\Users\dados\rhfariasn\auto_kestra\flow_envio_recebimentos_pagamentos\main.py", line 62, in run_scraper
+    await scraper_func()
+  File "C:\Users\dados\rhfariasn\auto_kestra\flow_envio_recebimentos_pagamentos\workflow\scripts\scrapeMooz.py", line 99, in main
+    raise e
+  File "C:\Users\dados\rhfariasn\auto_kestra\flow_envio_recebimentos_pagamentos\workflow\scripts\scrapeMooz.py", line 64, in main
+    month_label = f"Month {current_month + month_idx} of {now.year}"
+                           ^^^^^^^^^^^^^
+NameError: name 'current_month' is not defined
+2026-02-25 13:59:35 [INFO] MainOrchestrator: 🚀 Starting execution of ScrapeBoletos...
+2026-02-25 13:59:35 [INFO] workflow.components.navegador: Iniciando browser via Browserless (stealth=ON, headless=OFF)...
+2026-02-25 13:59:37 [INFO] workflow.components.navegador: Usando contexto default do Browserless (stealth preservado).
+2026-02-25 13:59:37 [INFO] workflow.components.navegador: Nenhum state.json encontrado. Sessao limpa.
+2026-02-25 13:59:52 [INFO] workflow.components.navegador: Browser encerrado com sucesso.
+2026-02-25 13:59:52 [INFO] MainOrchestrator: Execution interrupted by user.

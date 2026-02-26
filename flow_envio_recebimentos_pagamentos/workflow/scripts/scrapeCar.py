@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 from workflow.components.navegador import Navegador
 from workflow.components.wide_logger import WideLogger
 from workflow.components.data_cleaners import parse_brl, parse_titulos
+from workflow.components.log_setup import setup_file_logging
 from workflow.pages.calendarioCar import CalendarioCarPage, CS_CODES, MESES
 
 load_dotenv()
@@ -104,23 +105,33 @@ async def main():
 
                 try:
                     await calendario.select_filters(cs_code, month, year)
+
+                    loaded = await calendario.click_buscar()
+                    if not loaded:
+                        logger.error(f"Calendar did not load for {label}")
+                        continue
+
+                    data = await calendario.extract_calendar_data()
+                    data["cs_code"] = cs_code
+                    data["month"] = MESES[month]
+                    data["month_number"] = month
+                    data["year"] = year
+                    data["extraction_date"] = datetime.now().isoformat()
+
+                    all_results.append(data)
+
                 except Exception as e:
-                    logger.error(f"Filter selection failed for {label}: {e}")
+                    logger.error(f"Failed to extract {label}: {e}")
+                    # If browser/page is closed, break out of the entire loop
+                    if "Target page, context or browser has been closed" in str(e):
+                        logger.error("Browser closed unexpectedly. Saving data collected so far.")
+                        break
                     continue
-
-                loaded = await calendario.click_buscar()
-                if not loaded:
-                    logger.error(f"Calendar did not load for {label}")
-                    continue
-
-                data = await calendario.extract_calendar_data()
-                data["cs_code"] = cs_code
-                data["month"] = MESES[month]
-                data["month_number"] = month
-                data["year"] = year
-                data["extraction_date"] = datetime.now().isoformat()
-
-                all_results.append(data)
+            else:
+                # Only executed if inner loop did NOT break
+                continue
+            # Inner loop broke — break outer loop too
+            break
 
         # Clean financial data: add numeric fields
         for entry in all_results:
@@ -149,7 +160,7 @@ async def main():
 
         logger.add_context("total_extractions", len(all_results))
         logger.add_context("status_corrections", corrections)
-        success = True
+        success = len(all_results) > 0
 
     except Exception as e:
         logger.error(f"Error: {e}", error=e)
@@ -163,4 +174,5 @@ async def main():
 
 
 if __name__ == "__main__":
+    setup_file_logging("scrapeCar")
     asyncio.run(main())

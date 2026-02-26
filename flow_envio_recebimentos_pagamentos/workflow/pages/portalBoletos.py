@@ -299,7 +299,7 @@ class PortalBoletosPage:
     def get_date_range() -> tuple[str, str]:
         """
         Calculate date range: first day of current month → last day of next month.
-        Handles December → January rollover.
+        Handles year rollover (e.g. Dec → Jan next year).
         Returns (start_date, end_date) in DD/MM/YYYY format.
         """
         now = datetime.now()
@@ -307,12 +307,14 @@ class PortalBoletosPage:
 
         start_date = f"01/{m:02d}/{y}"
 
-        if m == 12:
-            next_m, next_y = 1, y + 1
-        else:
-            next_m, next_y = m + 1, y
+        # Target month = current + 1
+        end_m = m + 1
+        end_y = y
+        if end_m > 12:
+            end_m -= 12
+            end_y += 1
 
-        last_day = calendar.monthrange(next_y, next_m)[1]
-        end_date = f"{last_day:02d}/{next_m:02d}/{next_y}"
+        last_day = calendar.monthrange(end_y, end_m)[1]
+        end_date = f"{last_day:02d}/{end_m:02d}/{end_y}"
 
         return start_date, end_date

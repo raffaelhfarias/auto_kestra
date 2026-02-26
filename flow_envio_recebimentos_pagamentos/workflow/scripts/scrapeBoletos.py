@@ -8,6 +8,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../'
 from dotenv import load_dotenv
 from workflow.components.navegador import Navegador
 from workflow.components.wide_logger import WideLogger
+from workflow.components.log_setup import setup_file_logging
 from workflow.pages.portalBoletos import PortalBoletosPage
 
 load_dotenv()
@@ -84,4 +85,5 @@ async def main():
 
 
 if __name__ == "__main__":
+    setup_file_logging("scrapeBoletos")
     asyncio.run(main())

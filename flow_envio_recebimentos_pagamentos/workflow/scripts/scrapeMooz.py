@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 from workflow.components.navegador import Navegador
 from workflow.components.wide_logger import WideLogger
 from workflow.components.data_cleaners import parse_brl
+from workflow.components.log_setup import setup_file_logging
 from workflow.pages.moozCartoes import MoozCartoesPage
 
 load_dotenv()
@@ -48,6 +49,9 @@ async def main():
         
         all_data = []
 
+        # Extract current month + next month (2 total)
+        months_to_extract = 2
+
         for mid in ids:
             logger.info(f"Processing Merchant ID: {mid}")
             
@@ -55,21 +59,19 @@ async def main():
             await mooz_page.select_merchant(mid)
             await mooz_page.navigate_to_payments()
             
-            # Extract Current Month
-            data_current = await mooz_page.extract_calendar_data()
-            if data_current:
-                data_current['merchant_id'] = mid
-                data_current['scraped_at'] = datetime.now().isoformat()
-                all_data.append(data_current)
-            
-            # Navigate to Next Month & Extract
-            await mooz_page.navigate_to_next_month()
-            
-            data_next = await mooz_page.extract_calendar_data()
-            if data_next:
-                data_next['merchant_id'] = mid
-                data_next['scraped_at'] = datetime.now().isoformat()
-                all_data.append(data_next)
+            # Extract each month (current + next)
+            for month_idx in range(months_to_extract):
+                logger.info(f"Extracting month {month_idx + 1}/{months_to_extract} for merchant {mid}")
+                
+                data = await mooz_page.extract_calendar_data()
+                if data:
+                    data['merchant_id'] = mid
+                    data['scraped_at'] = datetime.now().isoformat()
+                    all_data.append(data)
+                
+                # Navigate to next month (except on the last iteration)
+                if month_idx < months_to_extract - 1:
+                    await mooz_page.navigate_to_next_month()
                 
             # Navigate back to selection for next iteration
             await mooz_page.navigate_to_select_merchant()
@@ -102,4 +104,5 @@ async def main():
         logger.finish(success=success)
 
 if __name__ == "__main__":
+    setup_file_logging("scrapeMooz")
     asyncio.run(main())
