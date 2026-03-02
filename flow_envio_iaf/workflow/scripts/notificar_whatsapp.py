@@ -19,6 +19,7 @@ EVOLUTION_API_KEY = os.environ.get("EVOLUTION_API_KEY")
 EVOLUTION_INSTANCE = os.environ.get("EVOLUTION_INSTANCE")
 WHATSAPP_ID_EDGAR = os.environ.get("WHATSAPP_ID_EDGAR")
 WHATSAPP_ID_PRISCILA = os.environ.get("WHATSAPP_ID_PRISCILA")
+WHATSAPP_ID_OPERACAO = os.environ.get("WHATSAPP_ID_OPERACAO")
 
 
 def carregar_mensagem(caminho: str = "mensagem_whatsapp.txt") -> str:
@@ -86,7 +87,8 @@ if __name__ == "__main__":
 
     destinatarios = [
         ("Edgar", WHATSAPP_ID_EDGAR),
-        ("Priscila", WHATSAPP_ID_PRISCILA)
+        ("Priscila", WHATSAPP_ID_PRISCILA),
+        ("Operação", WHATSAPP_ID_OPERACAO)
     ]
 
     sucessos = 0
