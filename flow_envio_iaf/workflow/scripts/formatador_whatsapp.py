@@ -74,7 +74,7 @@ class FormatadorWhatsapp:
             "Não Classificado": "⚪",
         }
         emoji_class = emojis_classificacao.get(classificacao_raw, "")
-        classificacao = f"{emoji_class} {classificacao_raw} ({atingimento})".strip()
+        classificacao = f"{emoji_class} {classificacao_raw}".strip()
             
         rankings = panorama.get("rankings", {})
         br = rankings.get("Brasil", "N/D")
