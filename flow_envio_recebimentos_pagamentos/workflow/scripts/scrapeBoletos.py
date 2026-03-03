@@ -43,7 +43,7 @@ async def main():
         await portal.navigate_to_portal()
         await portal.navigate_to_cns()
 
-        # Date range: 1st of current month → last day of next month
+        # Date range: 1st of current month → last day of month+2 (3 months)
         start_date, end_date = PortalBoletosPage.get_date_range()
         logger.info(f"Date range: {start_date} → {end_date}")
         logger.add_context("start_date", start_date)

@@ -199,11 +199,11 @@ class CalendarioCarPage:
 
     @staticmethod
     def get_extraction_periods() -> list[tuple[int, int]]:
-        """Return [(month, year), ...] for current month + next month (2 total)."""
+        """Return [(month, year), ...] for current month + next 2 months (3 total)."""
         now = datetime.now()
         m, y = now.month, now.year
         periods = []
-        for i in range(2):
+        for i in range(3):
             month = m + i
             year = y
             if month > 12:

@@ -49,8 +49,8 @@ async def main():
         
         all_data = []
 
-        # Extract current month + next month (2 total)
-        months_to_extract = 2
+        # Extract current month + next 2 months (3 total)
+        months_to_extract = 3
 
         for mid in ids:
             logger.info(f"Processing Merchant ID: {mid}")
