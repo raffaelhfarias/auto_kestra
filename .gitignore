@@ -7,4 +7,3 @@ __pycache__/
 *.yml
 .agent
 *.pbix
-/flow_rh
