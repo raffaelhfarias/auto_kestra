@@ -156,7 +156,46 @@ async def main():
         print("\n" + "=" * 60)
         print("✅ FLUXO CONCLUÍDO!")
         print("   O relatório foi solicitado no Tangerino.")
+        
+        # Leitura da planilha extraída para pegar apenas Nome e Saldo
+        print("\n📊 PROCESSANDO DADOS DA PLANILHA...")
+        resultados = []
+        try:
+            import xlrd
+            wb = xlrd.open_workbook(file_path)
+            sh = wb.sheet_by_index(0)
+            
+            # O nome do primeiro usuário normalmente aparece na linha 4 (index 4)
+            current_name = str(sh.row_values(4)[0]).strip()
+            
+            for rx in range(sh.nrows):
+                row = sh.row_values(rx)
+                col0 = str(row[0]).strip()
+                
+                if 'Total Praticado Hora Excedente' in col0:
+                    col_saldo_texto = str(row[6]).strip()
+                    col_saldo_valor = str(row[12]).strip() if len(row) > 12 else ""
+                    resultados.append(f"*{current_name}*\n{col_saldo_texto} {col_saldo_valor}\n")
+                    
+                    # O próximo nome geralmente está na linha seguinte após o fechamento
+                    if rx + 1 < sh.nrows:
+                       current_name = str(sh.row_values(rx + 1)[0]).strip()
+            
+            # Gera um output limpo pro Kestra ler
+            resultado_formatado = "\n".join(resultados)
+            
+            # Exporta em um arquivo de texto simples para o Kestra
+            with open("resumo_banco_horas.txt", "w", encoding="utf-8") as f:
+                f.write(resultado_formatado)
+                
+            print("================ Resumo do Banco ==================")
+            print(resultado_formatado)
+            
+        except Exception as ex:
+            logger.error(f"Erro ao processar planilha: {ex}", exc_info=True)
+
         print("=" * 60)
+        return file_path
 
 
     except Exception as e:

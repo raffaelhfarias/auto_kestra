@@ -141,13 +141,22 @@ class SolidesPage:
 
         logger.info("Formato Excel selecionado.")
 
-    async def gerar_relatorio(self):
-        """Clica no botão 'Gerar Relatório' e aguarda o processamento."""
-        logger.info("Clicando em 'Gerar Relatório'...")
-        await self.page.click(
-            'input.botaoConsultar[value="Gerar Relatório"]',
-            no_wait_after=True,
-        )
-        logger.info("Botão clicado. Aguardando processamento do servidor...")
-        await asyncio.sleep(10)
-        logger.info("Relatório solicitado com sucesso.")
+    async def gerar_relatorio(self) -> str:
+        """Clica no botão 'Gerar Relatório', aguarda o processamento e baixa o arquivo."""
+        logger.info("Clicando em 'Gerar Relatório' e aguardando download...")
+        
+        # Puxa o diretório de destino
+        download_dir = os.path.join(os.getcwd(), "relatorios")
+        os.makedirs(download_dir, exist_ok=True)
+        
+        async with self.page.expect_download(timeout=120000) as download_info:
+            await self.page.click(
+                'input.botaoConsultar[value="Gerar Relatório"]',
+                no_wait_after=True,
+            )
+            
+        download = await download_info.value
+        file_path = os.path.join(download_dir, download.suggested_filename)
+        await download.save_as(file_path)
+        logger.info(f"Relatório salvo em: {file_path}")
+        return file_path

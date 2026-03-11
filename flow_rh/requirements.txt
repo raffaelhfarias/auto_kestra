@@ -3,3 +3,4 @@ python-dotenv
 asyncio
 requests
 pyotp
+xlrd
