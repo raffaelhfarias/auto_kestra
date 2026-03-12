@@ -100,19 +100,28 @@ def processar_planilha(file_path: str) -> list[str]:
             for rx in range(sh.nrows):
                 row = sh.row_values(rx)
                 col0 = str(row[0]).strip()
-                
-                if 'Total Praticado Hora Excedente' in col0:
-                    col_saldo_texto = str(row[6]).strip()
-                    col_saldo_valor = str(row[12]).strip() if len(row) > 12 else ""
-                    
-                    # Nome;Saldo Acumulado até DD/MM/AAAA: HH:MM
-                    master_rows.append(f"{current_name};{col_saldo_texto} {col_saldo_valor}")
-                    
-                    # O próximo nome geralmente está na linha seguinte após o fechamento
-                    if rx + 1 < sh.nrows:
-                       next_val = str(sh.row_values(rx + 1)[0]).strip()
-                       if next_val and not next_val.startswith('Total'):
-                           current_name = next_val
+        sheet = wb.sheet_by_index(0)
+        
+        current_name = None
+        for row_idx in range(sheet.nrows):
+            cell_val = str(sheet.cell_value(row_idx, 0)).strip()
+            
+            # O nome do colaborador geralmente aparece após o CPF (padrão Tangerino)
+            if "CPF:" in cell_val:
+                if row_idx + 1 < sheet.nrows:
+                    current_name = str(sheet.cell_value(row_idx + 1, 0)).strip()
+            
+            # O saldo acumulado está em uma linha específica
+            if "Saldo Acumulado até" in cell_val:
+                # Separa o texto das horas (ex: "Saldo Acumulado até 11/03/2026: -04:07")
+                if ":" in cell_val:
+                    partes = cell_val.split(":", 1)
+                    texto_periodo = partes[0].strip() + ":"
+                    valor_saldo = partes[1].strip()
+                    if current_name:
+                        master_rows.append(f"{current_name};{texto_periodo};{valor_saldo}")
+                        current_name = None # Reseta para o próximo
+            
     except Exception as e:
         logger.error(f"Erro ao processar arquivo {file_path}: {e}")
     
@@ -239,6 +248,7 @@ async def main():
         # Exporta CSV (Dados unificados)
         csv_path = os.path.join(extracoes_dir, "resumo_banco_horas.csv")
         with open(csv_path, "w", encoding="utf-8-sig") as f:
+            f.write("Nome;Período;Saldo\n") # Cabeçalho
             f.write("\n".join(resultados_acumulados))
             
         print("\n" + "=" * 60)
