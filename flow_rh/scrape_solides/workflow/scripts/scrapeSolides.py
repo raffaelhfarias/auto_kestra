@@ -194,8 +194,8 @@ async def main():
             qtd_colaboradores = len(resultados_csv)
             
             # Cabeçalho do resumo visual
-            analise_geral = f"📊 *Análise Geral*\n👥 Total de Colaboradores: {qtd_colaboradores}\n"
-            analise_geral += f"📅 Período: {data_inicio} até {data_fim}"
+            analise_geral = f"📋 *Análise Geral*\nTotal de Colaboradores: {qtd_colaboradores}\n"
+            analise_geral += f"Período: {data_inicio} até {data_fim}"
             
             resultado_txt_formatado = analise_geral
             resultado_csv_formatado = "\n".join(resultados_csv)
