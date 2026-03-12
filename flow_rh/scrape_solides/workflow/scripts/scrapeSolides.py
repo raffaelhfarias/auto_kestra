@@ -108,18 +108,14 @@ def processar_planilha(file_path: str) -> list[str]:
             col0 = row_values[0]
             
             # 1. Detectar nome do colaborador
-            # Se a primeira coluna tem texto e as outras estão vazias, e não é um termo ignorado
-            # Ou se a linha anterior tinha "CPF/CNPJ"
             is_header = any(term.lower() in col0.lower() for term in ignore_terms)
-            
-            # Verifica se apenas col0 tem conteúdo
             others_empty = not any(row_values[1:])
             
             if col0 and others_empty and not is_header:
                 current_name = col0
                 logger.debug(f"Colaborador detectado: {current_name}")
             
-            # Backup: se ainda assim achar CPF/CNPJ, o nome costuma estar na próxima
+            # Backup: se achar CPF/CNPJ, o nome costuma estar na próxima linha
             if ("CPF/CNPJ:" in col0 or "CPF:" in col0) and row_idx + 1 < sheet.nrows:
                 potential = str(sheet.cell_value(row_idx + 1, 0)).strip()
                 if potential and not any(term.lower() in potential.lower() for term in ignore_terms):
@@ -128,17 +124,14 @@ def processar_planilha(file_path: str) -> list[str]:
             # 2. Buscar Saldo Acumulado na linha
             for val in row_values:
                 if "Saldo Acumulado" in val:
-                    # O valor está na última coluna
-                    valor_saldo = row_values[-1]
+                    valor_saldo = row_values[-1].strip()
                     
                     if current_name:
-                        # Usamos o formato ="valor" que é o padrão recomendado para o Excel tratar o conteúdo como texto literal
-                        # e preservar sinais negativos e dois pontos sem mostrar apóstrofos ou causar erros de fórmula.
-                        safe_saldo = f'="{valor_saldo}"'
-                        master_rows.append(f"{current_name};{val.replace(':', '')};{safe_saldo}")
+                        # Prefixo ' em todos os valores para o Excel tratar como texto
+                        master_rows.append(
+                            f"{current_name};{val.strip()};'{valor_saldo}"
+                        )
                         logger.info(f"Dados extraídos: {current_name} | {valor_saldo}")
-                        # Não resetamos o name aqui pois pode haver mais de um saldo pro mesmo nome? 
-                        # Geralmente é um por bloco, mas vamos manter o name até achar o próximo colaborador
                         break
             
     except Exception as e:
