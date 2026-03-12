@@ -56,6 +56,8 @@ def enviar_whatsapp():
                 logger.error(f"Erro ao enviar texto: {res.text}")
         except Exception as e:
             logger.error(f"Falha na requisição de texto: {e}")
+    else:
+        logger.warning(f"Arquivo de resumo não encontrado: {args.txt_path}")
 
     # 2. Enviar Arquivo CSV
     if os.path.exists(args.csv_path):
@@ -81,6 +83,8 @@ def enviar_whatsapp():
                 logger.error(f"Erro ao enviar CSV: {res.text}")
         except Exception as e:
             logger.error(f"Falha na requisição de mídia: {e}")
+    else:
+        logger.warning(f"Arquivo CSV não encontrado: {args.csv_path}")
 
 if __name__ == "__main__":
     enviar_whatsapp()
