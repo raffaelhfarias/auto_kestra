@@ -145,8 +145,10 @@ class SolidesPage:
         """Clica no botão 'Gerar Relatório', aguarda o processamento e baixa o arquivo."""
         logger.info("Clicando em 'Gerar Relatório' e aguardando download...")
         
-        # Puxa o diretório de destino
-        download_dir = os.path.join(os.getcwd(), "relatorios")
+        # Puxa o diretório de destino relativo à estrutura do projeto
+        # sólidos.py está em workflow/pages/solides.py, queremos scrape_solides/relatorios
+        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        download_dir = os.path.join(base_dir, "relatorios")
         os.makedirs(download_dir, exist_ok=True)
         
         async with self.page.expect_download(timeout=120000) as download_info:
@@ -156,33 +158,10 @@ class SolidesPage:
             )
             
         download = await download_info.value
-        
-        # Obter a URL real do download para contornar problemas do Browserless CDP
-        download_url = download.url
-        logger.info(f"URL de download capturada: {download_url}")
         file_path = os.path.join(download_dir, download.suggested_filename)
         
-        # Replicando a chamada manual pelo 'requests' para contornar arquivo 0 bytes do CDP
-        import requests
-        session = requests.Session()
-        
-        # Carregamos todos os cookies do contexto na sessao do python requests
-        cookies = await self.page.context.cookies()
-        for cookie in cookies:
-            session.cookies.set(cookie['name'], cookie['value'], domain=cookie['domain'])
-            
-        # Forçamos o mesmo User-Agent para não sermos bloqueados
-        user_agent = await self.page.evaluate("navigator.userAgent")
-        headers = {"User-Agent": user_agent}
-        
-        logger.info("Realizando GET manual com os cookies da sessão para salvar o arquivo...")
-        response = session.get(download_url, headers=headers, stream=True)
-        response.raise_for_status()
-        
-        with open(file_path, "wb") as f:
-            for chunk in response.iter_content(chunk_size=8192):
-                if chunk:
-                    f.write(chunk)
+        logger.info(f"Salvando download em: {file_path}")
+        await download.save_as(file_path)
                     
         # Checando tamanho do arquivo
         size = os.path.getsize(file_path)

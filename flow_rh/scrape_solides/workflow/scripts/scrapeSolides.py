@@ -158,7 +158,8 @@ async def main():
         
         # Leitura da planilha extraída para pegar apenas Nome e Saldo
         print("\n📊 PROCESSANDO DADOS DA PLANILHA...")
-        resultados = []
+        resultados_txt = []
+        resultados_csv = []
         try:
             import xlrd
             wb = xlrd.open_workbook(file_path)
@@ -174,21 +175,38 @@ async def main():
                 if 'Total Praticado Hora Excedente' in col0:
                     col_saldo_texto = str(row[6]).strip()
                     col_saldo_valor = str(row[12]).strip() if len(row) > 12 else ""
-                    resultados.append(f"*{current_name}*\n{col_saldo_texto} {col_saldo_valor}\n")
+                    
+                    # Formatação para o TXT (WhatsApp visual)
+                    resultados_txt.append(f"*{current_name}*\n{col_saldo_texto} {col_saldo_valor}\n")
+                    
+                    # Formatação para o CSV (nome;saldo_acumulado_até_xx/xx/xxxx)
+                    # Note que o usuário pediu "saldo_acumulado_até_xx/xx/xxxx" como valor ou chave
+                    # Vou seguir o padrão: Nome;Saldo Acumulado até DD/MM/AAAA: HH:MM
+                    resultados_csv.append(f"{current_name};{col_saldo_texto} {col_saldo_valor}")
                     
                     # O próximo nome geralmente está na linha seguinte após o fechamento
                     if rx + 1 < sh.nrows:
-                       current_name = str(sh.row_values(rx + 1)[0]).strip()
+                       next_val = str(sh.row_values(rx + 1)[0]).strip()
+                       if next_val and not next_val.startswith('Total'):
+                           current_name = next_val
             
-            # Gera um output limpo pro Kestra ler
-            resultado_formatado = "\n".join(resultados)
+            # Gera outputs
+            resultado_txt_formatado = "\n".join(resultados_txt)
+            resultado_csv_formatado = "\n".join(resultados_csv)
             
-            # Exporta em um arquivo de texto simples para o Kestra
+            # Exporta TXT (para compatibilidade com o que já funciona no Kestra)
             with open("resumo_banco_horas.txt", "w", encoding="utf-8") as f:
-                f.write(resultado_formatado)
+                f.write(resultado_txt_formatado)
                 
-            print("================ Resumo do Banco ==================")
-            print(resultado_formatado)
+            # Exporta CSV solicitado
+            csv_path = "resumo_banco_horas.csv"
+            with open(csv_path, "w", encoding="utf-8") as f:
+                # Opcional: Adicionar cabeçalho se desejar, mas o usuário pediu o dado direto
+                f.write(resultado_csv_formatado)
+                
+            print("================ Resumo do Banco (TXT) ==================")
+            print(resultado_txt_formatado)
+            print(f"\n✅ Arquivo CSV gerado: {os.path.abspath(csv_path)}")
             
         except Exception as ex:
             logger.error(f"Erro ao processar planilha: {ex}", exc_info=True)

@@ -30,32 +30,33 @@ class Navegador:
 
     async def setup_browser(self):
         """
-        Conecta ao Browserless via CDP com stealth e headless=false.
-        Usa o contexto default do Browserless (para manter stealth).
-        Carrega cookies do state.json manualmente se existir.
+        Inicia o browser localmente.
         """
-        logger.info("Iniciando browser via Browserless (stealth=ON, headless=OFF)...")
+        logger.info("Iniciando browser local (Playwright)...")
         self.playwright = await async_playwright().start()
 
-        # Monta URL CDP do Browserless
-        cdp_url = self._build_cdp_url()
+        # Verifica se estamos em ambiente Docker/Kestra (geralmente sem display)
+        # Se estiver rodando local no Windows, headless=False ajuda a ver o que ocorre.
+        is_docker = os.path.exists("/.dockerenv")
+        headless = True if is_docker else False
 
-        # Conecta ao Browserless
-        self.browser = await self.playwright.chromium.connect_over_cdp(cdp_url)
+        self.browser = await self.playwright.chromium.launch(
+            headless=headless,
+            args=[
+                "--disable-blink-features=AutomationControlled",
+                "--no-sandbox",
+                "--disable-setuid-sandbox"
+            ]
+        )
 
-        # IMPORTANTE: Usar o contexto default do Browserless para manter stealth!
-        # Criar new_context() perde as flags anti-deteccao e o Google bloqueia.
-        if self.browser.contexts:
-            self.context = self.browser.contexts[0]
-            logger.info("Usando contexto default do Browserless (stealth preservado).")
-        else:
-            self.context = await self.browser.new_context(
-                viewport={"width": 1366, "height": 768},
-                locale="pt-BR",
-            )
-            logger.info("Novo contexto criado (Browserless sem contexto default).")
+        self.context = await self.browser.new_context(
+            viewport={"width": 1366, "height": 768},
+            locale="pt-BR",
+            accept_downloads=True
+        )
+        logger.info(f"Contexto criado (headless={headless}, downloads=ON).")
 
-        # Carrega cookies do state.json manualmente no contexto default
+        # Carrega cookies do state.json manualmente se existir
         script_dir = os.path.dirname(__file__)
         state_path = os.path.join(script_dir, "..", "..", "state.json")
 
@@ -65,51 +66,18 @@ class Navegador:
                 with open(state_path, "r", encoding="utf-8") as f:
                     state_data = json.load(f)
 
-                # Injeta cookies
                 cookies = state_data.get("cookies", [])
                 if cookies:
                     await self.context.add_cookies(cookies)
                     logger.info(f"{len(cookies)} cookies carregados no contexto.")
-
-                # Injeta localStorage via script (para cada origin)
-                origins = state_data.get("origins", [])
-                for origin_data in origins:
-                    origin = origin_data.get("origin", "")
-                    local_storage = origin_data.get("localStorage", [])
-                    if local_storage and origin:
-                        logger.info(f"Carregando {len(local_storage)} itens de localStorage para {origin}")
-                        # localStorage sera aplicado quando navegarmos para a pagina
             except Exception as e:
                 logger.warning(f"Erro ao carregar state.json: {e}")
         else:
             logger.info("Nenhum state.json encontrado. Sessao limpa.")
 
-        # Usa pagina existente ou cria nova
-        self.page = self.context.pages[0] if self.context.pages else await self.context.new_page()
+        self.page = await self.context.new_page()
         self.page.set_default_timeout(60000)
         return self.page
-
-    def _build_cdp_url(self) -> str:
-        """Monta a URL de conexao CDP com stealth e headless=false."""
-        browserless_url = os.environ.get("SERVICE_URL_BROWSERLESS", "")
-        browserless_token = os.environ.get("SERVICE_PASSWORD_BROWSERLESS", "")
-
-        if not browserless_url or not browserless_token:
-            raise ValueError(
-                "Variaveis SERVICE_URL_BROWSERLESS e SERVICE_PASSWORD_BROWSERLESS sao obrigatorias!"
-            )
-
-        launch_config = quote(json.dumps({
-            "headless": False,
-            "stealth": True,
-            "args": [
-                "--disable-blink-features=AutomationControlled",
-                "--window-size=1366,768",
-            ]
-        }))
-
-        host = browserless_url.replace("https://", "").replace("http://", "").replace("wss://", "").replace("ws://", "").strip("/")
-        return f"wss://{host}?token={browserless_token}&timeout=300000&launch={launch_config}"
 
     def update_page(self, new_page):
         """Atualiza a referencia da pagina quando uma nova aba e aberta."""

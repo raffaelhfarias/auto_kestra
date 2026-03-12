@@ -7,3 +7,5 @@ __pycache__/
 *.yml
 .agent
 *.pbix
+**/relatorios/
+**/log/
