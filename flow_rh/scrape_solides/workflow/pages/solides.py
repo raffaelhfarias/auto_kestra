@@ -38,7 +38,10 @@ class SolidesPage:
         """Faz login no sistema Tangerino."""
         url = "https://app.tangerino.com.br/Tangerino/pages/LoginPage"
         logger.info(f"Navegando para {url}...")
-        await self.page.goto(url, wait_until="networkidle")
+        await self.page.goto(url, wait_until="domcontentloaded")
+        
+        # Garante que o campo de login está presente
+        await self.page.wait_for_selector('input[name="login"]', timeout=30000)
 
         logger.info("Preenchendo credenciais...")
         await self.page.fill('input[name="login"]', user)
@@ -49,24 +52,74 @@ class SolidesPage:
 
         logger.info("Aguardando carregamento pós-login...")
         try:
-            await self.page.wait_for_load_state("networkidle", timeout=60000)
-            logger.info("Aguardando renderização dos menus...")
-            await asyncio.sleep(5)
+            # Espera pelo redirecionamento para o Dashboard
+            await self.page.wait_for_url("**/Dashboard*", timeout=60000)
+            logger.info("Dashboard detectado.")
+            
+            # Espera o menu lateral carregar (um dos itens deve estar 'attached')
+            await self.page.wait_for_selector("span.nome-menu", state="attached", timeout=30000)
+            logger.info("Menus renderizados.")
+            
+            # Pequeno delay adicional para estabilidade de scripts de terceiros
+            await asyncio.sleep(2)
         except Exception as e:
             logger.warning(f"Timeout ou erro esperando carregamento: {e}")
+            if "Dashboard" not in self.page.url:
+                logger.error(f"Não parece estar no Dashboard. URL atual: {self.page.url}")
+            
+    async def fechar_modais_eventuais(self):
+        """Tenta fechar modais de aviso que podem bloquear cliques."""
+        try:
+            # Seletores comuns de botões de fechar em modais do Tangerino
+            close_buttons = [
+                ".modal-header .close",
+                ".modal-footer button:has-text('Fechar')",
+                ".modal-footer button:has-text('Ok')",
+                "#modalAvisoClose",
+                "button.close-modal"
+            ]
+            for selector in close_buttons:
+                loc = self.page.locator(selector)
+                if await loc.is_visible():
+                    logger.info(f"Fechando modal detectado ({selector})...")
+                    await loc.click(timeout=5000)
+                    await asyncio.sleep(1)
+        except Exception:
+            pass
 
     async def navegar_para_banco_horas(self):
         """Navega pelos menus: Ponto > Relatórios > Banco de horas / Hora extra."""
+        # Se já estiver na página de relatório, não clica de novo
+        if "pages/RelatorioBancoHoras" in self.page.url:
+            logger.info("Já está na página de Banco de Horas.")
+            return
+
         logger.info("Clicando no menu 'Ponto'...")
-        await self.page.click('span.nome-menu:has-text("Ponto")')
-        await asyncio.sleep(2)
+        # Fecha eventuais overlays antes de clicar
+        await self.fechar_modais_eventuais()
+        
+        # Selector mais genérico para o menu Ponto
+        selector_ponto = 'span.nome-menu:has-text("Ponto")'
+        await self.page.wait_for_selector(selector_ponto, state="visible", timeout=45000)
+        
+        try:
+            await self.page.click(selector_ponto, timeout=10000)
+        except Exception:
+            logger.warning("Falha no clique simples em 'Ponto', tentando clique forçado...")
+            await self.page.click(selector_ponto, force=True)
+            
+        await asyncio.sleep(1)
 
         logger.info("Clicando no submenu 'Relatórios'...")
-        await self.page.click('span.nome-menu-nivel-2:has-text("Relatórios")')
-        await asyncio.sleep(2)
+        selector_relat = 'span.nome-menu-nivel-2:has-text("Relatórios")'
+        await self.page.wait_for_selector(selector_relat, state="visible", timeout=30000)
+        await self.page.click(selector_relat)
+        await asyncio.sleep(1)
 
         logger.info("Clicando em 'Banco de horas / Hora extra'...")
-        await self.page.click('span:has-text("Banco de horas / Hora extra")')
+        selector_bh = 'span:has-text("Banco de horas / Hora extra")'
+        await self.page.wait_for_selector(selector_bh, state="visible", timeout=30000)
+        await self.page.click(selector_bh)
 
         logger.info("Aguardando carregamento do relatório...")
         try:
