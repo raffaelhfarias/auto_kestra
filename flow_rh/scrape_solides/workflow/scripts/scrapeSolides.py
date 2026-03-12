@@ -28,6 +28,35 @@ from workflow.pages.solides import SolidesPage, FILIAIS
 logger = logging.getLogger(__name__)
 
 
+# Lista ordenada de filiais para seleção numérica
+FILIAIS_LISTA = [
+    "Todas",
+    "Caaporã Perfumes Ltda - ME",
+    "Edalice Perfumes Ltda - ME",
+    "Edgar e Alice Perfumes Ltda - EPP",
+    "ESGN Perfumes Ltda - ME",
+    "Goianinha Perfumes Ltda - ME",
+    "Lua Branca Perfumes Ltda - ME",
+    "Maracatu Perfumes Ltda - EPP",
+    "Matriz",
+    "Millenium Perfumes Ltda - EPP",
+    "Pirauá Perfmues Ltda - ME",
+    "Sobralana Perfumes Ltda - EPP",
+    "Tejucupapo Perfumes Ltda - ME",
+    "Timbauba Perfumes Ltda",
+]
+
+
+def resolver_filial(valor: str) -> str:
+    """Resolve o valor da filial: aceita índice numérico (0-13) ou nome textual."""
+    if valor.isdigit():
+        idx = int(valor)
+        if 0 <= idx < len(FILIAIS_LISTA):
+            return FILIAIS_LISTA[idx]
+        raise ValueError(f"Índice {idx} fora do intervalo (0-{len(FILIAIS_LISTA)-1})")
+    return valor
+
+
 def solicitar_filial() -> str:
     """
     Exibe as filiais disponíveis e solicita a escolha do usuário.
@@ -37,9 +66,8 @@ def solicitar_filial() -> str:
     print("📋 FILIAIS DISPONÍVEIS")
     print("=" * 60)
 
-    filiais_list = list(FILIAIS.items())
-    for i, (value, nome) in enumerate(filiais_list):
-        marcador = "→" if value == "" else " "
+    for i, nome in enumerate(FILIAIS_LISTA):
+        marcador = "→" if nome == "Todas" else " "
         print(f"  {marcador} [{i}] {nome}")
 
     print("=" * 60)
@@ -49,15 +77,11 @@ def solicitar_filial() -> str:
             escolha = input("\n🏢 Digite o número da filial desejada (ou Enter para 'Todas'): ").strip()
             if escolha == "":
                 return "Todas"
-            idx = int(escolha)
-            if 0 <= idx < len(filiais_list):
-                _, nome = filiais_list[idx]
-                print(f"  ✅ Filial selecionada: {nome}")
-                return nome
-            else:
-                print("  ❌ Número fora do intervalo. Tente novamente.")
-        except ValueError:
-            print("  ❌ Entrada inválida. Digite um número.")
+            nome = resolver_filial(escolha)
+            print(f"  ✅ Filial selecionada: {nome}")
+            return nome
+        except ValueError as e:
+            print(f"  ❌ {e}. Tente novamente.")
 
 
 def solicitar_datas() -> tuple[str, str]:
@@ -127,9 +151,9 @@ def processar_planilha(file_path: str) -> list[str]:
                     valor_saldo = row_values[-1].strip()
                     
                     if current_name:
-                        # Prefixo ' em todos os valores para o Excel tratar como texto
+                        # Formatação pedida ="valor" para ser lido no excel sem alterar estrutura
                         master_rows.append(
-                            f"{current_name};{val.strip()};'{valor_saldo}"
+                            f'{current_name};{val.strip()};="{valor_saldo}"'
                         )
                         logger.info(f"Dados extraídos: {current_name} | {valor_saldo}")
                         break
@@ -188,7 +212,7 @@ async def main():
 
     # ── 2. Interação com o usuário / Argumentos ──────────────
     if args.filial and args.datainicio and args.datafim:
-        filial_escolhida = args.filial
+        filial_escolhida = resolver_filial(args.filial)
         data_inicio = args.datainicio
         data_fim = args.datafim
     else:
