@@ -84,6 +84,40 @@ def solicitar_datas() -> tuple[str, str]:
     return data_inicio, data_fim
 
 
+def processar_planilha(file_path: str) -> list[str]:
+    """Lê a planilha Excel e retorna uma lista de linhas formatadas para o CSV."""
+    import xlrd
+    master_rows = []
+    try:
+        wb = xlrd.open_workbook(file_path)
+        sh = wb.sheet_by_index(0)
+        
+        # O nome do primeiro usuário normalmente aparece na linha 4 (index 4)
+        if sh.nrows > 4:
+            current_name = str(sh.row_values(4)[0]).strip()
+            
+            for rx in range(sh.nrows):
+                row = sh.row_values(rx)
+                col0 = str(row[0]).strip()
+                
+                if 'Total Praticado Hora Excedente' in col0:
+                    col_saldo_texto = str(row[6]).strip()
+                    col_saldo_valor = str(row[12]).strip() if len(row) > 12 else ""
+                    
+                    # Nome;Saldo Acumulado até DD/MM/AAAA: HH:MM
+                    master_rows.append(f"{current_name};{col_saldo_texto} {col_saldo_valor}")
+                    
+                    # O próximo nome geralmente está na linha seguinte após o fechamento
+                    if rx + 1 < sh.nrows:
+                       next_val = str(sh.row_values(rx + 1)[0]).strip()
+                       if next_val and not next_val.startswith('Total'):
+                           current_name = next_val
+    except Exception as e:
+        logger.error(f"Erro ao processar arquivo {file_path}: {e}")
+    
+    return master_rows
+
+
 async def main():
     import argparse
     parser = argparse.ArgumentParser(description="Extração de Banco de Horas Solides")
@@ -114,16 +148,16 @@ async def main():
     print("=" * 60)
 
     if args.filial and args.datainicio and args.datafim:
-        filial = args.filial
+        filial_escolhida = args.filial
         data_inicio = args.datainicio
         data_fim = args.datafim
     else:
-        filial = solicitar_filial()
+        filial_escolhida = solicitar_filial()
         data_inicio, data_fim = solicitar_datas()
 
     print("\n" + "=" * 60)
     print("🚀 INICIANDO AUTOMAÇÃO")
-    print(f"   Filial:  {filial}")
+    print(f"   Filial Escolhida:  {filial_escolhida}")
     print(f"   Período: {data_inicio} → {data_fim}")
     print("=" * 60 + "\n")
 
@@ -133,100 +167,76 @@ async def main():
         page = await nav.setup_browser()
         solides = SolidesPage(page)
 
-
         # 3.1 Login
         await solides.realizar_login(user, password)
 
-        # 3.2 Navegação até Banco de Horas
-        await solides.navegar_para_banco_horas()
+        # Lista de filiais a processar
+        filiais_a_processar = []
+        if filial_escolhida == "Todas":
+            # Pega todos os nomes do mapa, exceto o vazio ("Todas")
+            filiais_a_processar = [nome for val, nome in FILIAIS.items() if val != ""]
+        else:
+            filiais_a_processar = [filial_escolhida]
 
-        # 3.3 Selecionar filial (se não for "Todas")
-        if filial != "Todas":
-            await solides.selecionar_filial_select2(filial)
+        resultados_acumulados = []
 
-        # 3.4 Preencher datas
-        await solides.preencher_datas(data_inicio, data_fim)
+        # Itera sobre as filiais
+        for filial in filiais_a_processar:
+            try:
+                logger.info(f">>> Processando Filial: {filial}")
+                
+                # Navega até a página de relatórios
+                await solides.navegar_para_banco_horas()
 
-        # 3.5 Selecionar formato Excel
-        await solides.selecionar_formato_excel()
+                # Seleciona a filial
+                await solides.selecionar_filial_select2(filial)
 
-        # 3.6 Gerar relatório e guardar o caminho do arquivo
-        file_path = await solides.gerar_relatorio()
-        print("\n" + "=" * 60)
-        print("✅ FLUXO CONCLUÍDO!")
-        print("   O relatório foi solicitado no Tangerino.")
+                # Preencher datas
+                await solides.preencher_datas(data_inicio, data_fim)
+
+                # Selecionar formato Excel
+                await solides.selecionar_formato_excel()
+
+                # Gerar relatório e baixar
+                file_path = await solides.gerar_relatorio()
+                
+                # Extrai dados desta filial
+                linhas_csv = processar_planilha(file_path)
+                resultados_acumulados.extend(linhas_csv)
+                
+                logger.info(f"✅ Filial {filial} processada. Colaboradores encontrados: {len(linhas_csv)}")
+                
+            except Exception as fe:
+                logger.error(f"Erro ao processar filial {filial}: {fe}")
+                continue
+
+        # ── 4. Consolidação de Resultados ─────────────────────────
+        qtd_total = len(resultados_acumulados)
+        analise_geral = f"📋 *Análise Geral*\nTotal de Colaboradores: {qtd_total}\n"
+        analise_geral += f"Período: {data_inicio} até {data_fim}"
         
-        # Leitura da planilha extraída para pegar apenas Nome e Saldo
-        print("\n📊 PROCESSANDO DADOS DA PLANILHA...")
-        resultados_txt = []
-        resultados_csv = []
-        try:
-            import xlrd
-            wb = xlrd.open_workbook(file_path)
-            sh = wb.sheet_by_index(0)
+        # Pasta de extrações
+        extracoes_dir = "extracoes"
+        os.makedirs(extracoes_dir, exist_ok=True)
+        
+        # Exporta TXT (Resumo para WhatsApp)
+        txt_path = os.path.join(extracoes_dir, "resumo_banco_horas.txt")
+        with open(txt_path, "w", encoding="utf-8") as f:
+            f.write(analise_geral)
             
-            # O nome do primeiro usuário normalmente aparece na linha 4 (index 4)
-            current_name = str(sh.row_values(4)[0]).strip()
+        # Exporta CSV (Dados unificados)
+        csv_path = os.path.join(extracoes_dir, "resumo_banco_horas.csv")
+        with open(csv_path, "w", encoding="utf-8") as f:
+            f.write("\n".join(resultados_acumulados))
             
-            for rx in range(sh.nrows):
-                row = sh.row_values(rx)
-                col0 = str(row[0]).strip()
-                
-                if 'Total Praticado Hora Excedente' in col0:
-                    col_saldo_texto = str(row[6]).strip()
-                    col_saldo_valor = str(row[12]).strip() if len(row) > 12 else ""
-                    
-                    # Formatação para o TXT (WhatsApp visual)
-                    resultados_txt.append(f"*{current_name}*\n{col_saldo_texto} {col_saldo_valor}\n")
-                    
-                    # Formatação para o CSV (nome;saldo_acumulado_até_xx/xx/xxxx)
-                    # Note que o usuário pediu "saldo_acumulado_até_xx/xx/xxxx" como valor ou chave
-                    # Vou seguir o padrão: Nome;Saldo Acumulado até DD/MM/AAAA: HH:MM
-                    resultados_csv.append(f"{current_name};{col_saldo_texto} {col_saldo_valor}")
-                    
-                    # O próximo nome geralmente está na linha seguinte após o fechamento
-                    if rx + 1 < sh.nrows:
-                       next_val = str(sh.row_values(rx + 1)[0]).strip()
-                       if next_val and not next_val.startswith('Total'):
-                           current_name = next_val
-            
-            # Gera outputs
-            qtd_colaboradores = len(resultados_csv)
-            
-            # Cabeçalho do resumo visual
-            analise_geral = f"📋 *Análise Geral*\nTotal de Colaboradores: {qtd_colaboradores}\n"
-            analise_geral += f"Período: {data_inicio} até {data_fim}"
-            
-            resultado_txt_formatado = analise_geral
-            resultado_csv_formatado = "\n".join(resultados_csv)
-            
-            # Pasta de extrações para organizar
-            extracoes_dir = "extracoes"
-            os.makedirs(extracoes_dir, exist_ok=True)
-            
-            # Exporta TXT
-            txt_path = os.path.join(extracoes_dir, "resumo_banco_horas.txt")
-            with open(txt_path, "w", encoding="utf-8") as f:
-                f.write(resultado_txt_formatado)
-                
-            # Exporta CSV
-            csv_path = os.path.join(extracoes_dir, "resumo_banco_horas.csv")
-            with open(csv_path, "w", encoding="utf-8") as f:
-                f.write(resultado_csv_formatado)
-                
-            print("================ Resumo do Banco (TXT) ==================")
-            print(resultado_txt_formatado)
-            print(f"\n✅ Arquivos gerados em: {os.path.abspath(extracoes_dir)}")
-            
-        except Exception as ex:
-            logger.error(f"Erro ao processar planilha: {ex}", exc_info=True)
-
+        print("\n" + "=" * 60)
+        print("✅ PROCESSO FINALIZADO!")
+        print(analise_geral)
+        print(f"\n📂 Arquivos gerados em: {os.path.abspath(extracoes_dir)}")
         print("=" * 60)
-        return file_path
-
 
     except Exception as e:
-        logger.error(f"Erro durante a automação: {e}", exc_info=True)
+        logger.error(f"Erro crítico durante a automação: {e}", exc_info=True)
     finally:
         await nav.stop_browser()
 
