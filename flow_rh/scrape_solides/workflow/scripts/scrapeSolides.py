@@ -191,7 +191,14 @@ async def main():
                            current_name = next_val
             
             # Gera outputs
-            resultado_txt_formatado = "\n".join(resultados_txt)
+            qtd_colaboradores = len(resultados_csv)
+            
+            # Cabeçalho do resumo visual
+            analise_geral = f"📊 *Análise Geral*\n👥 Total de Colaboradores: {qtd_colaboradores}\n"
+            analise_geral += f"📅 Período: {data_inicio} até {data_fim}\n"
+            analise_geral += "--------------------------------\n\n"
+            
+            resultado_txt_formatado = analise_geral + "\n".join(resultados_txt)
             resultado_csv_formatado = "\n".join(resultados_csv)
             
             # Exporta TXT (para compatibilidade com o que já funciona no Kestra)
@@ -201,7 +208,6 @@ async def main():
             # Exporta CSV solicitado
             csv_path = "resumo_banco_horas.csv"
             with open(csv_path, "w", encoding="utf-8") as f:
-                # Opcional: Adicionar cabeçalho se desejar, mas o usuário pediu o dado direto
                 f.write(resultado_csv_formatado)
                 
             print("================ Resumo do Banco (TXT) ==================")
