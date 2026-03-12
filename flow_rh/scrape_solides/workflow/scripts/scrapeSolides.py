@@ -195,7 +195,7 @@ async def main():
         for idx, filial in enumerate(filiais_a_processar, 1):
             try:
                 # Notificação de progresso
-                msg_progresso = f"⏳ *Processando:* {filial}\nEtapa: {idx} de {total_filiais}"
+                msg_progresso = f"*Processando:* {filial}\nEtapa: {idx} de {total_filiais}"
                 enviar_status_wa(msg_progresso, args.remoteJid, args.ev_url, args.ev_key, args.ev_instance)
                 
                 logger.info(f">>> Processando Filial: {filial} ({idx}/{total_filiais})")
@@ -213,7 +213,7 @@ async def main():
                 
             except Exception as fe:
                 logger.error(f"Erro ao processar filial {filial}: {fe}")
-                enviar_status_wa(f"⚠️ *Erro na filial:* {filial}\nPulando para a próxima...", args.remoteJid, args.ev_url, args.ev_key, args.ev_instance)
+                enviar_status_wa(f"⚠️ *Erro na filial:* {filial}", args.remoteJid, args.ev_url, args.ev_key, args.ev_instance)
                 continue
 
         # ── 4. Consolidação de Resultados ─────────────────────────
@@ -221,6 +221,7 @@ async def main():
             enviar_status_wa("✅ *Extração concluída!* Unificando dados e preparando arquivos...", args.remoteJid, args.ev_url, args.ev_key, args.ev_instance)
         else:
             enviar_status_wa("❌ *Aviso:* Nenhum dado foi encontrado no período selecionado.", args.remoteJid, args.ev_url, args.ev_key, args.ev_instance)
+            return
 
         qtd_total = len(resultados_acumulados)
         analise_geral = f"📋 *Análise Geral*\nTotal de Colaboradores: {qtd_total}\n"
