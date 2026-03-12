@@ -91,36 +91,52 @@ def processar_planilha(file_path: str) -> list[str]:
     master_rows = []
     try:
         wb = xlrd.open_workbook(file_path)
-        sh = wb.sheet_by_index(0)
-        
-        # O nome do primeiro usuário normalmente aparece na linha 4 (index 4)
-        if sh.nrows > 4:
-            current_name = str(sh.row_values(4)[0]).strip()
-            
-            for rx in range(sh.nrows):
-                row = sh.row_values(rx)
-                col0 = str(row[0]).strip()
         sheet = wb.sheet_by_index(0)
         
         current_name = None
+        # Lista de termos que indicam que a linha NÃO é um nome de colaborador
+        ignore_terms = [
+            "Relatório", "Período", "Empregador", "CPF/CNPJ", "Competência", 
+            "Saldo", "Total", "Dias Úteis", "Sábados", "Domingos", "Feriados",
+            "Primeira Fase", "Horas Praticadas", "Hora Excedente", "Validade"
+        ]
+        
         for row_idx in range(sheet.nrows):
-            cell_val = str(sheet.cell_value(row_idx, 0)).strip()
+            row_values = [str(v).strip() for v in sheet.row_values(row_idx)]
+            if not any(row_values): continue # Pula linhas vazias
             
-            # O nome do colaborador geralmente aparece após o CPF (padrão Tangerino)
-            if "CPF:" in cell_val:
-                if row_idx + 1 < sheet.nrows:
-                    current_name = str(sheet.cell_value(row_idx + 1, 0)).strip()
+            col0 = row_values[0]
             
-            # O saldo acumulado está em uma linha específica
-            if "Saldo Acumulado até" in cell_val:
-                # Separa o texto das horas (ex: "Saldo Acumulado até 11/03/2026: -04:07")
-                if ":" in cell_val:
-                    partes = cell_val.split(":", 1)
-                    texto_periodo = partes[0].strip() + ":"
-                    valor_saldo = partes[1].strip()
+            # 1. Detectar nome do colaborador
+            # Se a primeira coluna tem texto e as outras estão vazias, e não é um termo ignorado
+            # Ou se a linha anterior tinha "CPF/CNPJ"
+            is_header = any(term.lower() in col0.lower() for term in ignore_terms)
+            
+            # Verifica se apenas col0 tem conteúdo
+            others_empty = not any(row_values[1:])
+            
+            if col0 and others_empty and not is_header:
+                current_name = col0
+                logger.debug(f"Colaborador detectado: {current_name}")
+            
+            # Backup: se ainda assim achar CPF/CNPJ, o nome costuma estar na próxima
+            if ("CPF/CNPJ:" in col0 or "CPF:" in col0) and row_idx + 1 < sheet.nrows:
+                potential = str(sheet.cell_value(row_idx + 1, 0)).strip()
+                if potential and not any(term.lower() in potential.lower() for term in ignore_terms):
+                    current_name = potential
+
+            # 2. Buscar Saldo Acumulado na linha
+            for val in row_values:
+                if "Saldo Acumulado" in val:
+                    # O valor está na última coluna
+                    valor_saldo = row_values[-1]
+                    
                     if current_name:
-                        master_rows.append(f"{current_name};{texto_periodo};{valor_saldo}")
-                        current_name = None # Reseta para o próximo
+                        master_rows.append(f"{current_name};{val.replace(':', '')};{valor_saldo}")
+                        logger.info(f"Dados extraídos: {current_name} | {valor_saldo}")
+                        # Não resetamos o name aqui pois pode haver mais de um saldo pro mesmo nome? 
+                        # Geralmente é um por bloco, mas vamos manter o name até achar o próximo colaborador
+                        break
             
     except Exception as e:
         logger.error(f"Erro ao processar arquivo {file_path}: {e}")
@@ -237,16 +253,16 @@ async def main():
         analise_geral = f"📋 *Análise Geral*\nTotal de Colaboradores: {qtd_total}\n"
         analise_geral += f"Período: {data_inicio} até {data_fim}"
         
-        extracoes_dir = "extracoes"
-        os.makedirs(extracoes_dir, exist_ok=True)
+        # Define o diretório de saída como a raiz do scrape_solides
+        output_dir = PROJECT_ROOT
         
         # Exporta TXT (Resumo para WhatsApp)
-        txt_path = os.path.join(extracoes_dir, "resumo_banco_horas.txt")
+        txt_path = os.path.join(output_dir, "resumo_banco_horas.txt")
         with open(txt_path, "w", encoding="utf-8") as f:
             f.write(analise_geral)
             
         # Exporta CSV (Dados unificados)
-        csv_path = os.path.join(extracoes_dir, "resumo_banco_horas.csv")
+        csv_path = os.path.join(output_dir, "resumo_banco_horas.csv")
         with open(csv_path, "w", encoding="utf-8-sig") as f:
             f.write("Nome;Período;Saldo\n") # Cabeçalho
             f.write("\n".join(resultados_acumulados))
