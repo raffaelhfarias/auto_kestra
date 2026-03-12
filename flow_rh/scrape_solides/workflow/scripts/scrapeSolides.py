@@ -13,6 +13,7 @@ import asyncio
 import os
 import sys
 import logging
+import requests
 from pathlib import Path
 
 # Adiciona a raiz do projeto ao path para imports
@@ -253,5 +254,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    import requests # Garante imports necessários localmente
     asyncio.run(main())
