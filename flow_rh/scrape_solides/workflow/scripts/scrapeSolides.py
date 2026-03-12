@@ -118,12 +118,34 @@ def processar_planilha(file_path: str) -> list[str]:
     return master_rows
 
 
+def enviar_status_wa(mensagem, remote_jid, api_url, api_key, instance):
+    """Envia uma mensagem de status via WhatsApp."""
+    if not all([remote_jid, api_url, api_key, instance]):
+        return
+    
+    url = f"{api_url}/message/sendText/{instance}"
+    headers = {"apikey": api_key, "Content-Type": "application/json"}
+    payload = {"number": remote_jid, "text": mensagem}
+    
+    try:
+        requests.post(url, headers=headers, json=payload, timeout=10)
+    except Exception as e:
+        logger.warning(f"Falha ao enviar status WA: {e}")
+
+
 async def main():
     import argparse
     parser = argparse.ArgumentParser(description="Extração de Banco de Horas Solides")
     parser.add_argument("--filial", type=str, help="Nome da filial ou 'Todas' para todas as filiais")
     parser.add_argument("--datainicio", type=str, help="Data Inicial (DD/MM/AAAA)")
     parser.add_argument("--datafim", type=str, help="Data Final (DD/MM/AAAA)")
+    
+    # Argumentos para notificações em tempo real
+    parser.add_argument("--remoteJid", type=str, help="JID para notificações")
+    parser.add_argument("--ev_url", type=str, help="URL da Evolution API")
+    parser.add_argument("--ev_key", type=str, help="Key da Evolution API")
+    parser.add_argument("--ev_instance", type=str, help="Instância da Evolution API")
+    
     args = parser.parse_args()
 
     # ── 1. Configuração ──────────────────────────────────────
@@ -139,14 +161,10 @@ async def main():
     password = os.environ.get("TANGERINO_PASS")
 
     if not user or not password:
-        logger.error("Credenciais TANGERINO_USER ou TANGERINO_PASS não configuradas no .env")
+        logger.error("Credenciais TANGERINO_USER or TANGERINO_PASS não configuradas no .env")
         return
 
     # ── 2. Interação com o usuário / Argumentos ──────────────
-    print("\n" + "=" * 60)
-    print("🔄 SCRAPE SOLIDES - Extração de Banco de Horas")
-    print("=" * 60)
-
     if args.filial and args.datainicio and args.datafim:
         filial_escolhida = args.filial
         data_inicio = args.datainicio
@@ -154,12 +172,6 @@ async def main():
     else:
         filial_escolhida = solicitar_filial()
         data_inicio, data_fim = solicitar_datas()
-
-    print("\n" + "=" * 60)
-    print("🚀 INICIANDO AUTOMAÇÃO")
-    print(f"   Filial Escolhida:  {filial_escolhida}")
-    print(f"   Período: {data_inicio} → {data_fim}")
-    print("=" * 60 + "\n")
 
     # ── 3. Automação ─────────────────────────────────────────
     nav = Navegador()
@@ -171,51 +183,49 @@ async def main():
         await solides.realizar_login(user, password)
 
         # Lista de filiais a processar
-        filiais_a_processar = []
         if filial_escolhida == "Todas":
-            # Pega todos os nomes do mapa, exceto o vazio ("Todas")
             filiais_a_processar = [nome for val, nome in FILIAIS.items() if val != ""]
         else:
             filiais_a_processar = [filial_escolhida]
 
+        total_filiais = len(filiais_a_processar)
         resultados_acumulados = []
 
         # Itera sobre as filiais
-        for filial in filiais_a_processar:
+        for idx, filial in enumerate(filiais_a_processar, 1):
             try:
-                logger.info(f">>> Processando Filial: {filial}")
+                # Notificação de progresso
+                msg_progresso = f"⏳ *Processando:* {filial}\nEtapa: {idx} de {total_filiais}"
+                enviar_status_wa(msg_progresso, args.remoteJid, args.ev_url, args.ev_key, args.ev_instance)
                 
-                # Navega até a página de relatórios
+                logger.info(f">>> Processando Filial: {filial} ({idx}/{total_filiais})")
+                
                 await solides.navegar_para_banco_horas()
-
-                # Seleciona a filial
                 await solides.selecionar_filial_select2(filial)
-
-                # Preencher datas
                 await solides.preencher_datas(data_inicio, data_fim)
-
-                # Selecionar formato Excel
                 await solides.selecionar_formato_excel()
-
-                # Gerar relatório e baixar
                 file_path = await solides.gerar_relatorio()
                 
-                # Extrai dados desta filial
                 linhas_csv = processar_planilha(file_path)
                 resultados_acumulados.extend(linhas_csv)
                 
-                logger.info(f"✅ Filial {filial} processada. Colaboradores encontrados: {len(linhas_csv)}")
+                logger.info(f"✅ Filial {filial} processada. Colaboradores: {len(linhas_csv)}")
                 
             except Exception as fe:
                 logger.error(f"Erro ao processar filial {filial}: {fe}")
+                enviar_status_wa(f"⚠️ *Erro na filial:* {filial}\nPulando para a próxima...", args.remoteJid, args.ev_url, args.ev_key, args.ev_instance)
                 continue
 
         # ── 4. Consolidação de Resultados ─────────────────────────
+        if resultados_acumulados:
+            enviar_status_wa("✅ *Extração concluída!* Unificando dados e preparando arquivos...", args.remoteJid, args.ev_url, args.ev_key, args.ev_instance)
+        else:
+            enviar_status_wa("❌ *Aviso:* Nenhum dado foi encontrado no período selecionado.", args.remoteJid, args.ev_url, args.ev_key, args.ev_instance)
+
         qtd_total = len(resultados_acumulados)
         analise_geral = f"📋 *Análise Geral*\nTotal de Colaboradores: {qtd_total}\n"
         analise_geral += f"Período: {data_inicio} até {data_fim}"
         
-        # Pasta de extrações
         extracoes_dir = "extracoes"
         os.makedirs(extracoes_dir, exist_ok=True)
         
@@ -232,14 +242,15 @@ async def main():
         print("\n" + "=" * 60)
         print("✅ PROCESSO FINALIZADO!")
         print(analise_geral)
-        print(f"\n📂 Arquivos gerados em: {os.path.abspath(extracoes_dir)}")
         print("=" * 60)
 
     except Exception as e:
         logger.error(f"Erro crítico durante a automação: {e}", exc_info=True)
+        enviar_status_wa(f"❌ *Erro Crítico:* {str(e)}", args.remoteJid, args.ev_url, args.ev_key, args.ev_instance)
     finally:
         await nav.stop_browser()
 
 
 if __name__ == "__main__":
+    import requests # Garante imports necessários localmente
     asyncio.run(main())
