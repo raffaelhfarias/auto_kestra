@@ -132,7 +132,9 @@ def processar_planilha(file_path: str) -> list[str]:
                     valor_saldo = row_values[-1]
                     
                     if current_name:
-                        master_rows.append(f"{current_name};{val.replace(':', '')};{valor_saldo}")
+                        # Prependemos um apóstrofo (') para forçar o Excel a tratar como texto e não fórmula/hora negativa
+                        safe_saldo = f"'{valor_saldo}" if valor_saldo.startswith("-") or ":" in valor_saldo else valor_saldo
+                        master_rows.append(f"{current_name};{val.replace(':', '')};{safe_saldo}")
                         logger.info(f"Dados extraídos: {current_name} | {valor_saldo}")
                         # Não resetamos o name aqui pois pode haver mais de um saldo pro mesmo nome? 
                         # Geralmente é um por bloco, mas vamos manter o name até achar o próximo colaborador
