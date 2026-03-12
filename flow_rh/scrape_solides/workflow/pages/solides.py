@@ -52,20 +52,14 @@ class SolidesPage:
 
         logger.info("Aguardando carregamento pós-login...")
         try:
-            # Espera pelo redirecionamento para o Dashboard
-            await self.page.wait_for_url("**/Dashboard*", timeout=60000)
-            logger.info("Dashboard detectado.")
-            
-            # Espera o menu lateral carregar (um dos itens deve estar 'attached')
-            await self.page.wait_for_selector("span.nome-menu", state="attached", timeout=30000)
-            logger.info("Menus renderizados.")
+            # Espera o menu lateral carregar (um dos itens deve estar 'attached') como prova de login
+            await self.page.wait_for_selector("span.nome-menu", state="attached", timeout=60000)
+            logger.info("Menus renderizados pós-login.")
             
             # Pequeno delay adicional para estabilidade de scripts de terceiros
             await asyncio.sleep(2)
         except Exception as e:
-            logger.warning(f"Timeout ou erro esperando carregamento: {e}")
-            if "Dashboard" not in self.page.url:
-                logger.error(f"Não parece estar no Dashboard. URL atual: {self.page.url}")
+            logger.warning(f"Timeout ou erro esperando renderização dos menus: {e}")
             
     async def fechar_modais_eventuais(self):
         """Tenta fechar modais de aviso que podem bloquear cliques."""
