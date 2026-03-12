@@ -226,7 +226,7 @@ async def main():
             
         # Exporta CSV (Dados unificados)
         csv_path = os.path.join(extracoes_dir, "resumo_banco_horas.csv")
-        with open(csv_path, "w", encoding="utf-8") as f:
+        with open(csv_path, "w", encoding="utf-8-sig") as f:
             f.write("\n".join(resultados_acumulados))
             
         print("\n" + "=" * 60)
