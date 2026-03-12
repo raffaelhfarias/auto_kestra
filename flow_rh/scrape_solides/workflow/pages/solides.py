@@ -156,18 +156,34 @@ class SolidesPage:
             )
             
         download = await download_info.value
+        
+        # Obter a URL real do download para contornar problemas do Browserless CDP
+        download_url = download.url
+        logger.info(f"URL de download capturada: {download_url}")
         file_path = os.path.join(download_dir, download.suggested_filename)
         
-        error = await download.failure()
-        if error:
-            logger.error(f"===== DEU ERRO NO DOWNLOAD =====: {error}")
+        # Replicando a chamada manual pelo 'requests' para contornar arquivo 0 bytes do CDP
+        import requests
+        session = requests.Session()
+        
+        # Carregamos todos os cookies do contexto na sessao do python requests
+        cookies = await self.page.context.cookies()
+        for cookie in cookies:
+            session.cookies.set(cookie['name'], cookie['value'], domain=cookie['domain'])
             
-        logger.info(f"Fazendo save_as do arquivo no playwright: {file_path}")
-        await download.save_as(file_path)
+        # Forçamos o mesmo User-Agent para não sermos bloqueados
+        user_agent = await self.page.evaluate("navigator.userAgent")
+        headers = {"User-Agent": user_agent}
         
-        # Só pra ter certeza que aguardou gravar em disco
-        await asyncio.sleep(2)
+        logger.info("Realizando GET manual com os cookies da sessão para salvar o arquivo...")
+        response = session.get(download_url, headers=headers, stream=True)
+        response.raise_for_status()
         
+        with open(file_path, "wb") as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    f.write(chunk)
+                    
         # Checando tamanho do arquivo
         size = os.path.getsize(file_path)
         logger.info(f"Relatório salvo com sucesso em: {file_path} | Tamanho: {size} bytes")
