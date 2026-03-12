@@ -150,9 +150,8 @@ async def main():
         # 3.5 Selecionar formato Excel
         await solides.selecionar_formato_excel()
 
-        # 3.6 Gerar relatório
-        await solides.gerar_relatorio()
-
+        # 3.6 Gerar relatório e guardar o caminho do arquivo
+        file_path = await solides.gerar_relatorio()
         print("\n" + "=" * 60)
         print("✅ FLUXO CONCLUÍDO!")
         print("   O relatório foi solicitado no Tangerino.")

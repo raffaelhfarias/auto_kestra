@@ -21,10 +21,13 @@ class TeeWriter:
         self.original_stdout = original_stdout
 
     def write(self, data):
-        self.original_stdout.write(data)
+        try:
+            self.original_stdout.write(data)
+        except UnicodeEncodeError:
+            enc = getattr(self.original_stdout, 'encoding', 'cp1252') or 'cp1252'
+            self.original_stdout.write(data.encode(enc, errors='replace').decode(enc))
         self.log_file.write(data)
         self.log_file.flush()
-
     def flush(self):
         self.original_stdout.flush()
         self.log_file.flush()
@@ -48,5 +51,5 @@ def setup_file_logging(script_name: str):
     log_file = open(log_filepath, "w", encoding="utf-8")
     sys.stdout = TeeWriter(log_file, sys.__stdout__)
 
-    print(f"📄 Log file: {log_filepath}")
+    print(f"Log file: {log_filepath}")
     return log_filepath

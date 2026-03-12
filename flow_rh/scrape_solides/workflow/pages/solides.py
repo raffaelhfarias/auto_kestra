@@ -157,6 +157,19 @@ class SolidesPage:
             
         download = await download_info.value
         file_path = os.path.join(download_dir, download.suggested_filename)
+        
+        error = await download.failure()
+        if error:
+            logger.error(f"===== DEU ERRO NO DOWNLOAD =====: {error}")
+            
+        logger.info(f"Fazendo save_as do arquivo no playwright: {file_path}")
         await download.save_as(file_path)
-        logger.info(f"Relatório salvo em: {file_path}")
+        
+        # Só pra ter certeza que aguardou gravar em disco
+        await asyncio.sleep(2)
+        
+        # Checando tamanho do arquivo
+        size = os.path.getsize(file_path)
+        logger.info(f"Relatório salvo com sucesso em: {file_path} | Tamanho: {size} bytes")
+        
         return file_path
