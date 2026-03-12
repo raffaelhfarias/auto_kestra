@@ -201,18 +201,23 @@ async def main():
             resultado_txt_formatado = analise_geral + "\n".join(resultados_txt)
             resultado_csv_formatado = "\n".join(resultados_csv)
             
-            # Exporta TXT (para compatibilidade com o que já funciona no Kestra)
-            with open("resumo_banco_horas.txt", "w", encoding="utf-8") as f:
+            # Pasta de extrações para organizar
+            extracoes_dir = "extracoes"
+            os.makedirs(extracoes_dir, exist_ok=True)
+            
+            # Exporta TXT
+            txt_path = os.path.join(extracoes_dir, "resumo_banco_horas.txt")
+            with open(txt_path, "w", encoding="utf-8") as f:
                 f.write(resultado_txt_formatado)
                 
-            # Exporta CSV solicitado
-            csv_path = "resumo_banco_horas.csv"
+            # Exporta CSV
+            csv_path = os.path.join(extracoes_dir, "resumo_banco_horas.csv")
             with open(csv_path, "w", encoding="utf-8") as f:
                 f.write(resultado_csv_formatado)
                 
             print("================ Resumo do Banco (TXT) ==================")
             print(resultado_txt_formatado)
-            print(f"\n✅ Arquivo CSV gerado: {os.path.abspath(csv_path)}")
+            print(f"\n✅ Arquivos gerados em: {os.path.abspath(extracoes_dir)}")
             
         except Exception as ex:
             logger.error(f"Erro ao processar planilha: {ex}", exc_info=True)
