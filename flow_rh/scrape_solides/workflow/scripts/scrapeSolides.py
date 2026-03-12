@@ -196,9 +196,8 @@ async def main():
             # Cabeçalho do resumo visual
             analise_geral = f"📊 *Análise Geral*\n👥 Total de Colaboradores: {qtd_colaboradores}\n"
             analise_geral += f"📅 Período: {data_inicio} até {data_fim}\n"
-            analise_geral += "--------------------------------\n\n"
             
-            resultado_txt_formatado = analise_geral + "\n".join(resultados_txt)
+            resultado_txt_formatado = analise_geral
             resultado_csv_formatado = "\n".join(resultados_csv)
             
             # Pasta de extrações para organizar

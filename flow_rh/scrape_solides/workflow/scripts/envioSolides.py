@@ -32,9 +32,6 @@ def enviar_whatsapp():
     
     args = parser.parse_args()
 
-    # Log de depuração dos arquivos presentes
-    logger.info(f"Arquivos no diretório atual: {os.listdir('.')}")
-
     # Carrega variáveis de ambiente
     PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
     load_dotenv(PROJECT_ROOT / ".env")
@@ -61,7 +58,7 @@ def enviar_whatsapp():
         
         payload_text = {
             "number": args.remoteJid,
-            "text": f"✅ *Relatório Gerado com Sucesso*\n\n{texto_resumo}"
+            "text": f"{texto_resumo}"
         }
         
         try:
@@ -87,7 +84,7 @@ def enviar_whatsapp():
         
         payload_media = {
             "number": args.remoteJid,
-            "media": f"data:text/csv;base64,{base64_data}",
+            "media": base64_data,
             "fileName": filename,
             "caption": "📄 Arquivo CSV para análise detalhada.",
             "mediatype": "document"
