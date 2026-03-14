@@ -228,6 +228,9 @@ async def main():
         # 3.1 Login
         await solides.realizar_login(user, password)
 
+        logger.info("Navegando para a página de Banco de Horas (apenas 1x)...")
+        await solides.navegar_para_banco_horas()
+
         # Lista de filiais a processar
         if filial_escolhida == "Todas":
             filiais_a_processar = [nome for val, nome in FILIAIS.items() if val != ""]
@@ -246,7 +249,7 @@ async def main():
                 
                 logger.info(f">>> Processando Filial: {filial} ({idx}/{total_filiais})")
                 
-                await solides.navegar_para_banco_horas()
+                # A navegação já foi feita antes do loop, estamos na página de filtros
                 await solides.selecionar_filial_select2(filial)
                 await solides.preencher_datas(data_inicio, data_fim)
                 await solides.selecionar_formato_excel()
