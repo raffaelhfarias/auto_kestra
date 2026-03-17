@@ -5,7 +5,10 @@ print()-based output is captured in the log directory.
 """
 
 import sys
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+
+# Fuso horário de Fortaleza/São Paulo (UTC-3)
+TZ_BRASIL = timezone(timedelta(hours=-3))
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -44,7 +47,7 @@ def setup_file_logging(script_name: str):
     Returns:
         The path to the log file.
     """
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    timestamp = datetime.now(TZ_BRASIL).strftime("%Y-%m-%d_%H-%M-%S")
     log_filename = f"{script_name}_{timestamp}.log"
     log_filepath = LOG_DIR / log_filename
 

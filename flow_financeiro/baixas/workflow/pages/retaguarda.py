@@ -6,7 +6,10 @@ Responsavel por login e navegacao ate a pagina de baixas.
 import asyncio
 import os
 import logging
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+
+# Fuso horário de Fortaleza/São Paulo (UTC-3)
+TZ_BRASIL = timezone(timedelta(hours=-3))
 
 logger = logging.getLogger(__name__)
 
@@ -112,7 +115,7 @@ class RetaguardaPage:
         )
 
         # 7. Preencher Observação (data completa com horário para versionamento)
-        observacao = datetime.now().strftime("%d/%m/%Y - %H:%M")
+        observacao = datetime.now(TZ_BRASIL).strftime("%d/%m/%Y - %H:%M")
         
         logger.info(f"Preenchendo observacao com: {observacao}")
         await self.page.fill('[data-cy="requisicao-mercadoria-observacao-input-field"]', observacao)
