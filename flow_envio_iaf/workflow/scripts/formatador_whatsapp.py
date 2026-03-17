@@ -31,6 +31,20 @@ class FormatadorWhatsapp:
         return 0.0
 
     @staticmethod
+    def _parse_pontos(val_str: str) -> float:
+        """Extrai o valor numérico dos pontos (ex: '290 pts' -> 290.0, '97,30 pts' -> 97.3)"""
+        if not val_str or val_str == "N/D":
+            return 0.0
+        match = re.search(r'([\d\.,]+)\s*pts?', val_str)
+        if match:
+            num_str = match.group(1).replace('.', '').replace(',', '.')
+            try:
+                return float(num_str)
+            except ValueError:
+                pass
+        return 0.0
+
+    @staticmethod
     def _get_last_line(val_str: str) -> str:
         """Pega apenas a última linha de uma string com quebras (útil pra pegar % que vem junto com pts)"""
         if not val_str:
@@ -61,9 +75,20 @@ class FormatadorWhatsapp:
         
         # --- PANORAMA ---
         panorama = dados.get("panorama", {})
-        pontuacao = panorama.get("pontuacao_cp", "N/D")
         atingimento = panorama.get("classificacao_pct", "N/D")
         classificacao_raw = panorama.get("classificacao", "N/D")
+        
+        # Calcular pontuação do CP como soma dos pontos dos pilares
+        pilares_brutos = dados.get("pilares", [])
+        soma_pontos = sum(
+            FormatadorWhatsapp._parse_pontos(p.get("pontos", "0"))
+            for p in pilares_brutos
+        )
+        # Formatar a pontuação (sem decimal se for inteiro)
+        if soma_pontos == int(soma_pontos):
+            pontuacao = f"{int(soma_pontos)} pts"
+        else:
+            pontuacao = f"{soma_pontos:.2f} pts".replace('.', ',')
         
         # Emoji por classificação
         emojis_classificacao = {
@@ -83,11 +108,17 @@ class FormatadorWhatsapp:
         clube = rankings.get("MUSK", rankings.get("Clube", "N/D"))
 
         # --- PILARES ---
-        pilares_brutos = dados.get("pilares", [])
         pilares_formatados = []
         for p in pilares_brutos:
             pct_str = FormatadorWhatsapp._get_last_line(p.get("atingimento", "0%"))
             pct = FormatadorWhatsapp._parse_percent(pct_str)
+            
+            # Extrair pontuação do pilar
+            pontos_pilar = FormatadorWhatsapp._parse_pontos(p.get("pontos", "0"))
+            if pontos_pilar == int(pontos_pilar):
+                pontos_fmt = f"{int(pontos_pilar)} pts"
+            else:
+                pontos_fmt = f"{pontos_pilar:.2f} pts".replace('.', ',')
             
             # Definindo cores (Farol de performance) - Verde somente para 100%
             if pct >= 100:
@@ -103,7 +134,7 @@ class FormatadorWhatsapp:
             pct_formated = f"{pct:.1f}%".replace('.', ',').replace(',0%', '%')
             pilares_formatados.append({
                 "pct": pct,
-                "texto": f"{icone} {nome} ({pct_formated})"
+                "texto": f"{icone} {nome} ({pct_formated}) - {pontos_fmt}"
             })
             
         # Ordenar os pilares do maior para o menor atingimento

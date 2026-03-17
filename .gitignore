@@ -11,3 +11,4 @@ __pycache__/
 **/log/
 resumo_banco_horas.txt
 resumo_banco_horas.csv
+**/data/

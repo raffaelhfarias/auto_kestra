@@ -249,8 +249,27 @@ class IAFPage:
 
         # Panorama
         pan = dados.get("panorama", {})
+        pilares = dados.get("pilares", [])
+        
+        # Calcular pontuação do CP como soma dos pontos dos pilares
+        soma_pontos = 0.0
+        for p in pilares:
+            pontos_str = p.get("pontos", "0")
+            match_pts = re.search(r'([\d\.,]+)\s*pts?', pontos_str) if pontos_str and pontos_str != "N/D" else None
+            if match_pts:
+                num_str = match_pts.group(1).replace('.', '').replace(',', '.')
+                try:
+                    soma_pontos += float(num_str)
+                except ValueError:
+                    pass
+        
+        if soma_pontos == int(soma_pontos):
+            pontuacao_fmt = f"{int(soma_pontos)} pts"
+        else:
+            pontuacao_fmt = f"{soma_pontos:.2f} pts".replace('.', ',')
+        
         linhas.append("## Panorama")
-        linhas.append(f"- **Pontuação do CP:** {pan.get('pontuacao_cp', 'N/D')}")
+        linhas.append(f"- **Pontuação do CP:** {pontuacao_fmt}")
         linhas.append(f"- **Classificação:** {pan.get('classificacao', 'N/D')} ({pan.get('classificacao_pct', 'N/D')})")
         linhas.append("")
 
@@ -262,7 +281,6 @@ class IAFPage:
             linhas.append("")
 
         # Pilares
-        pilares = dados.get("pilares", [])
         if pilares:
             linhas.append("## Pilares")
             linhas.append("| Pilar | Pontos | Meta | Atingimento | Falta p/ Meta |")
