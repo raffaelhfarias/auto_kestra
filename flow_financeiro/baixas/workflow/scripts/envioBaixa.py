@@ -3,12 +3,21 @@ import os
 import glob
 import logging
 from pathlib import Path
-from dotenv import load_dotenv
 
 # Adiciona o diretório base ao sys.path para permitir imports relativos dos componentes e páginas
 import sys
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
-sys.path.append(str(BASE_DIR))
+
+# No Kestra, PYTHONPATH = flow_financeiro/baixas, e o CWD é o WorkingDirectory raiz.
+# Localmente, __file__ resolve para o caminho absoluto.
+IS_KESTRA = os.environ.get("KESTRA_MODE", "").lower() == "true"
+
+if IS_KESTRA:
+    # No container Kestra, o WorkingDirectory contém tudo
+    BASE_DIR = Path.cwd() / "flow_financeiro" / "baixas"
+else:
+    BASE_DIR = Path(__file__).resolve().parent.parent.parent
+
+sys.path.insert(0, str(BASE_DIR))
 
 from workflow.components.navegador import Navegador
 from workflow.components.leitor_planilha import ler_planilha_baixas
@@ -110,28 +119,34 @@ async def main():
     Varre a pasta inbox/ e processa cada arquivo .xls encontrado.
     """
     # 1. Carregar variáveis de ambiente
-    load_dotenv(BASE_DIR / ".env")
-    user = os.getenv("RETAGUARDA_USER")
-    password = os.getenv("RETAGUARDA_PASS")
+    #    No Kestra, as credenciais vêm via env (kv store). Localmente, carrega do .env.
+    if not IS_KESTRA:
+        try:
+            from dotenv import load_dotenv
+            load_dotenv(BASE_DIR / ".env")
+        except ImportError:
+            logger.warning("python-dotenv não instalado, usando variáveis de ambiente do sistema.")
+
+    user = os.environ.get("RETAGUARDA_USER")
+    password = os.environ.get("RETAGUARDA_PASS")
 
     if not user or not password:
-        logger.error("Credenciais RETAGUARDA_USER ou RETAGUARDA_PASS não encontradas no arquivo .env")
+        logger.error("Credenciais RETAGUARDA_USER ou RETAGUARDA_PASS não encontradas.")
         return
 
     # Garantir que as pastas existem
+    INBOX_DIR.mkdir(parents=True, exist_ok=True)
     PROCESSADOS_DIR.mkdir(parents=True, exist_ok=True)
     ERRO_DIR.mkdir(parents=True, exist_ok=True)
 
-    # === Integração com Kestra (Google Drive) ===
-    arquivo_id = os.environ.get("GOOGLE_ARQUIVO_ID")
-    arquivo_nome = os.environ.get("GOOGLE_ARQUIVO_NOME")
-    
-    if arquivo_id:
-        logger.info(f"=== KESTRA/GDRIVE: Novo arquivo detectado: {arquivo_nome} (ID: {arquivo_id}) ===")
-        # Aqui virá a lógica (futura) de download do arquivo a partir do arquivo_id para o INBOX_DIR
-        # Ex: GoogleDriveDownloader.download_file(arquivo_id, INBOX_DIR)
+    # === Log de contexto ===
+    arquivo_id = os.environ.get("GOOGLE_ARQUIVO_ID", "")
+    arquivo_nome = os.environ.get("GOOGLE_ARQUIVO_NOME", "")
+
+    if IS_KESTRA:
+        logger.info(f"=== KESTRA: Arquivo '{arquivo_nome}' (ID: {arquivo_id}) já baixado via Drive Download ===")
     else:
-        logger.info("=== LOCAL: Nenhum arquivo Kestra detectado, rodando modo padrao/local ===")
+        logger.info("=== LOCAL: Rodando em modo local ==")
 
     # 2. Buscar arquivos na inbox
     arquivos = glob.glob(str(INBOX_DIR / "CP*.xls"))
