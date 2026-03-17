@@ -122,6 +122,17 @@ async def main():
     PROCESSADOS_DIR.mkdir(parents=True, exist_ok=True)
     ERRO_DIR.mkdir(parents=True, exist_ok=True)
 
+    # === Integração com Kestra (Google Drive) ===
+    pasta_id = os.environ.get("GOOGLE_PASTA_ID")
+    pasta_nome = os.environ.get("GOOGLE_PASTA_NOME")
+    
+    if pasta_id:
+        logger.info(f"=== KESTRA/GDRIVE: Nova pasta detectada: {pasta_nome} (ID: {pasta_id}) ===")
+        # Aqui virá a lógica (futura) de download dos arquivos a partir da pasta_id para o INBOX_DIR
+        # Ex: GoogleDriveDownloader.download_folder(pasta_id, INBOX_DIR)
+    else:
+        logger.info("=== LOCAL: Nenhuma pasta Kestra detectada, rodando modo padrao/local ===")
+
     # 2. Buscar arquivos na inbox
     arquivos = glob.glob(str(INBOX_DIR / "CP*.xls"))
     if not arquivos:
