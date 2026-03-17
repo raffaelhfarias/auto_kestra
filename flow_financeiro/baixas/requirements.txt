@@ -4,3 +4,4 @@ asyncio
 requests
 pyotp
 xlrd
+openpyxl

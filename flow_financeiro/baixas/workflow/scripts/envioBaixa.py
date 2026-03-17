@@ -148,8 +148,8 @@ async def main():
     else:
         logger.info("=== LOCAL: Rodando em modo local ==")
 
-    # 2. Buscar arquivos na inbox
-    arquivos = glob.glob(str(INBOX_DIR / "CP*.xls"))
+    # 2. Buscar arquivos na inbox (.xls e .xlsx)
+    arquivos = glob.glob(str(INBOX_DIR / "CP*.xls")) + glob.glob(str(INBOX_DIR / "CP*.xlsx"))
     if not arquivos:
         logger.info("Nenhum arquivo encontrado na pasta inbox/. Nada a processar.")
         return
