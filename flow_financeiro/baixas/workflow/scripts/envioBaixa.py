@@ -51,7 +51,13 @@ async def processar_arquivo(retaguarda: RetaguardaPage, caminho_arquivo: str):
 
     if not dados_guias:
         logger.warning(f"Nenhum dado valido encontrado em {nome_arquivo}. Movendo para erro/.")
-        return False, [], codigo_loja
+        return {
+            "sucesso": False,
+            "loja": codigo_loja,
+            "produtosNaoEncontrados": [],
+            "guiasProcessadas": [],
+            "erro": "Nenhum dado valido encontrado na planilha."
+        }
 
     # 2. Separar guias unificaveis das individuais
     GUIAS_UNIFICAVEIS = {"Produtos Vencidos", "Avarias"}
@@ -65,58 +71,77 @@ async def processar_arquivo(retaguarda: RetaguardaPage, caminho_arquivo: str):
             guias_individuais[nome_guia] = produtos
 
     produtos_nao_encontrados_total = []
+    guias_sucesso = []
 
-    # 3. Processar guias unificadas (Produtos Vencidos + Avarias) em uma unica requisicao
-    if guias_unificadas:
-        # Junta todos os produtos das guias unificaveis
-        produtos_unificados = []
-        nomes_guias = []
-        for nome_guia, produtos in guias_unificadas.items():
-            nomes_guias.append(nome_guia)
-            produtos_unificados.extend(produtos)
+    try:
+        # 3. Processar guias unificadas (Produtos Vencidos + Avarias) em uma unica requisicao
+        if guias_unificadas:
+            # Junta todos os produtos das guias unificaveis
+            produtos_unificados = []
+            nomes_guias = []
+            for nome_guia, produtos in guias_unificadas.items():
+                nomes_guias.append(nome_guia)
+                produtos_unificados.extend(produtos)
 
-        logger.info(
-            f"--- Processando guias unificadas: {', '.join(nomes_guias)} "
-            f"({len(produtos_unificados)} produtos no total) ---"
-        )
+            logger.info(
+                f"--- Processando guias unificadas: {', '.join(nomes_guias)} "
+                f"({len(produtos_unificados)} produtos no total) ---"
+            )
 
-        # Navegar para a pagina de cadastro
-        await retaguarda.navegar_para_baixas()
+            # Navegar para a pagina de cadastro
+            await retaguarda.navegar_para_baixas()
 
-        # Preencher cabecalho usando a primeira guia como referencia para o motivo
-        # Como sao unificadas, usamos a primeira guia encontrada
-        guia_referencia = nomes_guias[0]
-        await retaguarda.preencher_cabecalho_baixa(nome_arquivo, guia_referencia)
+            # Preencher cabecalho usando a primeira guia como referencia para o motivo
+            guia_referencia = nomes_guias[0]
+            await retaguarda.preencher_cabecalho_baixa(nome_arquivo, guia_referencia)
 
-        # Adicionar todos os produtos de uma vez
-        nao_encontrados = await retaguarda.iterar_produtos_guia(produtos_unificados)
-        produtos_nao_encontrados_total.extend(nao_encontrados)
+            # Adicionar todos os produtos de uma vez
+            nao_encontrados = await retaguarda.iterar_produtos_guia(produtos_unificados)
+            produtos_nao_encontrados_total.extend(nao_encontrados)
 
-        # Clicar em Gravar
-        await retaguarda.gravar_requisicao()
+            # Clicar em Gravar
+            await retaguarda.gravar_requisicao()
 
-        logger.info(f"Guias unificadas ({', '.join(nomes_guias)}) gravadas com sucesso.")
+            guias_sucesso.extend(nomes_guias)
+            logger.info(f"Guias unificadas ({', '.join(nomes_guias)}) gravadas com sucesso.")
 
-    # 4. Processar guias individuais (cada uma em sua propria requisicao)
-    for nome_guia, produtos in guias_individuais.items():
-        logger.info(f"--- Processando guia individual: {nome_guia} ({len(produtos)} produtos) ---")
+        # 4. Processar guias individuais (cada uma em sua propria requisicao)
+        for nome_guia, produtos in guias_individuais.items():
+            logger.info(f"--- Processando guia individual: {nome_guia} ({len(produtos)} produtos) ---")
 
-        # Navegar para a pagina de cadastro (nova requisicao)
-        await retaguarda.navegar_para_baixas()
+            # Navegar para a pagina de cadastro (nova requisicao)
+            await retaguarda.navegar_para_baixas()
 
-        # Preencher cabecalho
-        await retaguarda.preencher_cabecalho_baixa(nome_arquivo, nome_guia)
+            # Preencher cabecalho
+            await retaguarda.preencher_cabecalho_baixa(nome_arquivo, nome_guia)
 
-        # Iterar e adicionar todos os produtos
-        nao_encontrados = await retaguarda.iterar_produtos_guia(produtos)
-        produtos_nao_encontrados_total.extend(nao_encontrados)
+            # Iterar e adicionar todos os produtos
+            nao_encontrados = await retaguarda.iterar_produtos_guia(produtos)
+            produtos_nao_encontrados_total.extend(nao_encontrados)
 
-        # Clicar em Gravar
-        await retaguarda.gravar_requisicao()
+            # Clicar em Gravar
+            await retaguarda.gravar_requisicao()
 
-        logger.info(f"Guia '{nome_guia}' gravada com sucesso.")
+            guias_sucesso.append(nome_guia)
+            logger.info(f"Guia '{nome_guia}' gravada com sucesso.")
 
-    return True, produtos_nao_encontrados_total, codigo_loja
+        return {
+            "sucesso": True,
+            "loja": codigo_loja,
+            "produtosNaoEncontrados": produtos_nao_encontrados_total,
+            "guiasProcessadas": guias_sucesso,
+            "erro": ""
+        }
+
+    except Exception as e:
+        logger.error(f"Erro durante o processamento do arquivo {nome_arquivo}: {e}")
+        return {
+            "sucesso": False,
+            "loja": codigo_loja,
+            "produtosNaoEncontrados": produtos_nao_encontrados_total,
+            "guiasProcessadas": guias_sucesso,
+            "erro": str(e)
+        }
 
 
 
@@ -174,21 +199,33 @@ async def main():
 
         # 5. Processar cada arquivo
         todas_baixas_outputs = []
+        houve_erro_fatal = False
+
         for caminho in arquivos:
             nome = os.path.basename(caminho)
             try:
                 retorno = await processar_arquivo(retaguarda, caminho)
-                if isinstance(retorno, tuple):
-                    sucesso, nao_encontrados, loja = retorno
-                else:
-                    sucesso, nao_encontrados, loja = retorno, [], ""
-
-                if sucesso:
-                    loja_num = int(loja) if loja.isdigit() else loja
+                
+                # Tratar o retorno como o dicionario que construímos acima
+                if isinstance(retorno, dict):
+                    sucesso = retorno.get("sucesso", False)
+                    loja = retorno.get("loja", "")
+                    todas_baixas_outputs.append(retorno)
+                else: # Fallback defensivo
+                    sucesso, nao_encontrados, loja = retorno if isinstance(retorno, tuple) else (False, [], "")
                     todas_baixas_outputs.append({
+                        "sucesso": sucesso,
+                        "loja": loja,
                         "produtosNaoEncontrados": nao_encontrados,
-                        "loja": loja_num
+                        "guiasProcessadas": [],
+                        "erro": ""
                     })
+
+                # Adicionar cast para loja ser int apenas no append/merge caso seja padrao numerico
+                if 'loja' in todas_baixas_outputs[-1]:
+                    loja_val = todas_baixas_outputs[-1]['loja']
+                    if isinstance(loja_val, str) and loja_val.isdigit():
+                        todas_baixas_outputs[-1]['loja'] = int(loja_val)
 
                 # Mover arquivo para processados/ ou erro/
                 destino = PROCESSADOS_DIR if sucesso else ERRO_DIR
@@ -196,17 +233,30 @@ async def main():
                 os.rename(caminho, str(destino_final))
                 logger.info(f"Arquivo '{nome}' movido para {destino.name}/")
 
+                if not sucesso:
+                    houve_erro_fatal = True
+
             except Exception as e:
                 logger.error(f"Erro ao processar '{nome}': {e}")
+                houve_erro_fatal = True
                 # Mover para erro/
                 try:
                     os.rename(caminho, str(ERRO_DIR / nome))
                     logger.info(f"Arquivo '{nome}' movido para erro/")
                 except Exception:
                     logger.error(f"Falha ao mover '{nome}' para erro/")
+                
+                todas_baixas_outputs.append({
+                    "sucesso": False,
+                    "loja": "".join(filter(str.isdigit, nome.split('_')[0])),
+                    "produtosNaoEncontrados": [],
+                    "guiasProcessadas": [],
+                    "erro": str(e)
+                })
 
     except Exception as e:
         logger.error(f"Erro durante a execução do fluxo: {e}")
+        houve_erro_fatal = True
     finally:
         # 6. Encerrar Browser
         await navegador.stop_browser()
@@ -220,6 +270,12 @@ async def main():
             else:
                 kestra_out = {"outputs": {"relatorios_baixas": todas_baixas_outputs}}
             print(f"::{json.dumps(kestra_out)}::")
+
+        # Falhar o script para alertar o orquestrador que o fluxo nao foi limpo
+        if 'houve_erro_fatal' in locals() and houve_erro_fatal:
+            import sys
+            logger.error("Fluxo finalizado com erro(s). Encerrando com status de falha (exit 1).")
+            sys.exit(1)
 
 if __name__ == "__main__":
     asyncio.run(main())
