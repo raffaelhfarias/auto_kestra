@@ -163,7 +163,7 @@ class RetaguardaPage:
         
         logger.info("Cabecalho da baixa preenchido com sucesso.")
 
-    async def adicionar_produto(self, codigo_produto: str, quantidade: str):
+    async def adicionar_produto(self, codigo_produto: str, quantidade: str) -> bool:
         """
         Adiciona um unico produto na requisicao de mercadoria.
         Assume que o modal ja esta aberto.
@@ -171,6 +171,9 @@ class RetaguardaPage:
         Args:
             codigo_produto: Codigo do produto (ex: '250589')
             quantidade: Quantidade a transferir (ex: '2')
+            
+        Returns:
+            bool: True se encontrou e adicionou o produto, False se nao encontrou.
         """
         # Obter o locator do modal. Usamos o filter de visibilidade para garantir que pegamos o modal ativo.
         modal = self.page.locator('.flora-modal__content, [role="dialog"]').locator("visible=true").last
@@ -185,14 +188,28 @@ class RetaguardaPage:
 
         # 2. Aguardar a lista suspensa carregar e clicar no produto
         await asyncio.sleep(1.5)
+        nenhum_resultado = modal.locator('[data-cy="select-list-options-no-result"]')
+
         try:
             opcao_produto = self.page.locator(f'.flora-dropdown__option:has-text("{codigo_produto}")').locator("visible=true").first
-            await opcao_produto.wait_for(timeout=10000)
-            await opcao_produto.click()
-            logger.info(f"Produto {codigo_produto} selecionado da lista.")
+            
+            try:
+                await opcao_produto.wait_for(timeout=4000)
+                await opcao_produto.click()
+                logger.info(f"Produto {codigo_produto} selecionado da lista.")
+            except Exception:
+                if await nenhum_resultado.count() > 0 and await nenhum_resultado.is_visible():
+                    logger.warning(f"Produto {codigo_produto} nao encontrado no sistema. Pulando...")
+                    await campo_produto.fill("")
+                    return False
+                else:
+                    logger.error(f"Produto {codigo_produto} nao foi listado a tempo.")
+                    await campo_produto.fill("")
+                    return False
         except Exception as e:
-            logger.error(f"Produto {codigo_produto} nao encontrado na lista suspensa: {e}")
-            raise
+            logger.error(f"Erro inesperado ao selecionar o produto {codigo_produto}: {e}")
+            await campo_produto.fill("")
+            return False
 
         await asyncio.sleep(0.5)
 
@@ -227,35 +244,56 @@ class RetaguardaPage:
         logger.info(f"Produto {codigo_produto} processado com sucesso.")
         await asyncio.sleep(1)
 
-    async def iterar_produtos_guia(self, produtos: list):
+    async def iterar_produtos_guia(self, produtos: list) -> list:
         """
         Itera sobre todos os produtos de uma guia e adiciona cada um.
 
         Args:
             produtos: Lista de dicts com 'produto' e 'quantidade'.
                       Ex: [{"produto": "250589", "quantidade": "2"}, ...]
+                      
+        Returns:
+            list: Lista contendo os codigos dos produtos nao encontrados.
         """
         total = len(produtos)
         logger.info(f"Iniciando iteracao de {total} produto(s)...")
+
+        produtos_nao_encontrados = []
+        botao_adicionar_pagina = '[data-cy="requisicao-mercadoria-adicionar-produto-button"]'
 
         for idx, item in enumerate(produtos, start=1):
             codigo = item["produto"]
             qtd = item["quantidade"]
             logger.info(f"--- Produto {idx}/{total}: {codigo} (qtd: {qtd}) ---")
 
-            # Clicar no botao 'Adicionar' da pagina para abrir o modal
-            botao_adicionar_pagina = '[data-cy="requisicao-mercadoria-adicionar-produto-button"]'
-            await self.page.click(botao_adicionar_pagina)
-            logger.info("Modal de produto aberto.")
-            await asyncio.sleep(1)
+            modal = self.page.locator('.flora-modal__content, [role="dialog"]').locator("visible=true")
+            if await modal.count() == 0:
+                # Clicar no botao 'Adicionar' da pagina para abrir o modal
+                await self.page.click(botao_adicionar_pagina)
+                logger.info("Modal de produto aberto.")
+                await asyncio.sleep(1)
 
-            # Aguardar o modal estar visivel (selector genérico para a marcação do modal)
-            await self.page.wait_for_selector('.flora-modal__content, [role="dialog"]', timeout=10000)
+                # Aguardar o modal estar visivel
+                await self.page.wait_for_selector('.flora-modal__content, [role="dialog"]', timeout=10000)
 
             # Adicionar o produto dentro do modal
-            await self.adicionar_produto(codigo, qtd)
+            sucesso = await self.adicionar_produto(codigo, qtd)
+            if not sucesso:
+                produtos_nao_encontrados.append(codigo)
 
-        logger.info(f"Todos os {total} produto(s) foram adicionados com sucesso.")
+        # Se o ultimo produto iterado nao foi encontrado, o modal pode ainda estar aberto.
+        # Devemos fecha-lo para nao bloquear acoes futuras como 'Gravar'
+        modal_residual = self.page.locator('.flora-modal__content, [role="dialog"]').locator("visible=true")
+        if await modal_residual.count() > 0:
+            logger.info("Fechando modal residual de produtos nao encontrados...")
+            await self.page.keyboard.press('Escape')
+            await asyncio.sleep(0.5)
+            if await modal_residual.count() > 0:
+                await self.page.keyboard.press('Escape')
+            await asyncio.sleep(1)
+
+        logger.info(f"Iteracao concluida. Produtos não encontrados: {len(produtos_nao_encontrados)} de {total}.")
+        return produtos_nao_encontrados
 
     async def gravar_requisicao(self):
         """Clica no botao 'Gravar' para salvar a requisicao de mercadoria."""

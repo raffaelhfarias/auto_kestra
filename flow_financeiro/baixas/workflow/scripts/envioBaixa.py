@@ -43,12 +43,15 @@ async def processar_arquivo(retaguarda: RetaguardaPage, caminho_arquivo: str):
     nome_arquivo = os.path.basename(caminho_arquivo)
     logger.info(f"=== Processando arquivo: {nome_arquivo} ===")
 
+    # Extrair codigo de loja (ex: CP123_... -> '123' ou CP8374 -> '8374')
+    codigo_loja = "".join(filter(str.isdigit, nome_arquivo.split('_')[0]))
+
     # 1. Ler planilha e extrair produtos por guia
     dados_guias = ler_planilha_baixas(caminho_arquivo)
 
     if not dados_guias:
         logger.warning(f"Nenhum dado valido encontrado em {nome_arquivo}. Movendo para erro/.")
-        return False
+        return False, [], codigo_loja
 
     # 2. Separar guias unificaveis das individuais
     GUIAS_UNIFICAVEIS = {"Produtos Vencidos", "Avarias"}
@@ -60,6 +63,8 @@ async def processar_arquivo(retaguarda: RetaguardaPage, caminho_arquivo: str):
             guias_unificadas[nome_guia] = produtos
         else:
             guias_individuais[nome_guia] = produtos
+
+    produtos_nao_encontrados_total = []
 
     # 3. Processar guias unificadas (Produtos Vencidos + Avarias) em uma unica requisicao
     if guias_unificadas:
@@ -84,7 +89,8 @@ async def processar_arquivo(retaguarda: RetaguardaPage, caminho_arquivo: str):
         await retaguarda.preencher_cabecalho_baixa(nome_arquivo, guia_referencia)
 
         # Adicionar todos os produtos de uma vez
-        await retaguarda.iterar_produtos_guia(produtos_unificados)
+        nao_encontrados = await retaguarda.iterar_produtos_guia(produtos_unificados)
+        produtos_nao_encontrados_total.extend(nao_encontrados)
 
         # Clicar em Gravar
         await retaguarda.gravar_requisicao()
@@ -102,14 +108,15 @@ async def processar_arquivo(retaguarda: RetaguardaPage, caminho_arquivo: str):
         await retaguarda.preencher_cabecalho_baixa(nome_arquivo, nome_guia)
 
         # Iterar e adicionar todos os produtos
-        await retaguarda.iterar_produtos_guia(produtos)
+        nao_encontrados = await retaguarda.iterar_produtos_guia(produtos)
+        produtos_nao_encontrados_total.extend(nao_encontrados)
 
         # Clicar em Gravar
         await retaguarda.gravar_requisicao()
 
         logger.info(f"Guia '{nome_guia}' gravada com sucesso.")
 
-    return True
+    return True, produtos_nao_encontrados_total, codigo_loja
 
 
 
@@ -166,10 +173,22 @@ async def main():
         await retaguarda.realizar_login(user, password)
 
         # 5. Processar cada arquivo
+        todas_baixas_outputs = []
         for caminho in arquivos:
             nome = os.path.basename(caminho)
             try:
-                sucesso = await processar_arquivo(retaguarda, caminho)
+                retorno = await processar_arquivo(retaguarda, caminho)
+                if isinstance(retorno, tuple):
+                    sucesso, nao_encontrados, loja = retorno
+                else:
+                    sucesso, nao_encontrados, loja = retorno, [], ""
+
+                if sucesso:
+                    loja_num = int(loja) if loja.isdigit() else loja
+                    todas_baixas_outputs.append({
+                        "produtosNaoEncontrados": nao_encontrados,
+                        "loja": loja_num
+                    })
 
                 # Mover arquivo para processados/ ou erro/
                 destino = PROCESSADOS_DIR if sucesso else ERRO_DIR
@@ -191,6 +210,16 @@ async def main():
     finally:
         # 6. Encerrar Browser
         await navegador.stop_browser()
+
+        # Emitir o output para o Kestra
+        # Se houver apenas um arquivo, enviamos o output diretamente na raiz
+        if 'todas_baixas_outputs' in locals() and todas_baixas_outputs:
+            import json
+            if len(todas_baixas_outputs) == 1:
+                kestra_out = {"outputs": todas_baixas_outputs[0]}
+            else:
+                kestra_out = {"outputs": {"relatorios_baixas": todas_baixas_outputs}}
+            print(f"::{json.dumps(kestra_out)}::")
 
 if __name__ == "__main__":
     asyncio.run(main())
