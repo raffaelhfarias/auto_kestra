@@ -52,18 +52,59 @@ class RetaguardaPage:
         logger.info(f"Navegando diretamente para: {url_baixa}")
         await self.page.goto(url_baixa, wait_until="domcontentloaded")
         
-        # O sistema pode levar um tempo para carregar o conteúdo da SPA após o hash change
-        await asyncio.sleep(2)
+        # Aguarda o formulário de requisição estar de fato renderizado na SPA
+        try:
+            await self.page.wait_for_selector(
+                '[data-cy="select-requisicao-mercadoria-loja-input-field"]',
+                state='visible',
+                timeout=15000
+            )
+        except Exception:
+            # Fallback: espera fixa caso o seletor mude
+            await asyncio.sleep(3)
+        
+        await asyncio.sleep(1)
         logger.info("Página de Baixas (Requisicao Mercadoria) acessada.")
 
-    async def selecionar_opcao_dropdown(self, selector_input: str, texto_opcao: str):
-        """Auxiliar para clicar em dropdowns 'flora' e selecionar opcao."""
+    async def selecionar_opcao_dropdown(self, selector_input: str, texto_opcao: str, max_tentativas: int = 3):
+        """
+        Auxiliar para clicar em dropdowns 'flora' e selecionar opcao.
+        Possui retry: se as opções não aparecerem, re-clica no input para reabrir o dropdown.
+        """
         logger.info(f"Selecionando '{texto_opcao}' no campo {selector_input}")
-        await self.page.click(selector_input)
-        await asyncio.sleep(0.5)
-        # Tenta selecionar a opcao pelo texto absoluto ou parcial
-        await self.page.click(f'.flora-dropdown__option:has-text("{texto_opcao}")')
-        await asyncio.sleep(0.5)
+        option_selector = f'.flora-dropdown__option:has-text("{texto_opcao}")'
+
+        for tentativa in range(1, max_tentativas + 1):
+            try:
+                # Clica no input para abrir o dropdown
+                await self.page.click(selector_input)
+                
+                # Aguarda as opções do dropdown aparecerem de fato
+                await self.page.wait_for_selector(
+                    option_selector,
+                    state='visible',
+                    timeout=10000
+                )
+                
+                # Clica na opção desejada
+                await self.page.click(option_selector)
+                await asyncio.sleep(0.5)
+                return  # Sucesso, sai do loop
+                
+            except Exception as e:
+                logger.warning(
+                    f"Tentativa {tentativa}/{max_tentativas} falhou ao selecionar '{texto_opcao}' "
+                    f"no campo {selector_input}: {e}"
+                )
+                if tentativa < max_tentativas:
+                    # Fecha qualquer dropdown aberto clicando fora e aguarda antes de tentar novamente
+                    await self.page.keyboard.press('Escape')
+                    await asyncio.sleep(1.5)
+                else:
+                    raise Exception(
+                        f"Falha ao selecionar '{texto_opcao}' no campo {selector_input} "
+                        f"apos {max_tentativas} tentativas."
+                    )
 
     async def preencher_cabecalho_baixa(self, nome_arquivo: str, nome_guia: str):
         """
