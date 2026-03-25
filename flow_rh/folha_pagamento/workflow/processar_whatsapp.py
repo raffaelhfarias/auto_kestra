@@ -4,6 +4,7 @@ import base64
 import json
 import subprocess
 import requests
+import glob
 
 def download_and_extract():
     # 1. Obter variáveis do ambiente
@@ -52,7 +53,6 @@ def download_and_extract():
 
     pdf_bytes = base64.b64decode(b64_content)
     pdf_input = "folha_input.pdf"
-    output_csv = "folha_resultado.csv"
 
     with open(pdf_input, "wb") as f:
         f.write(pdf_bytes)
@@ -64,8 +64,7 @@ def download_and_extract():
         [
             "python", 
             "flow_rh/folha_pagamento/workflow/extrair_folha.py",
-            "--pdf", pdf_input, 
-            "--output", output_csv
+            "--pdf", pdf_input
         ],
         capture_output=True, 
         text=True
@@ -81,14 +80,26 @@ def download_and_extract():
         print(f"❌ Falha no script de extração (Exit Code: {result.returncode})", file=sys.stderr)
         sys.exit(result.returncode)
 
-    # 4. Exportar CSV como base64 (para envio via Evolution API)
-    with open(output_csv, "rb") as f:
+    # 4. Encontrar arquivo CSV gerado
+    csv_files = glob.glob("*.csv")
+    if not csv_files:
+        print("❌ Erro: nenhum arquivo CSV foi encontrado após a extração.", file=sys.stderr)
+        sys.exit(1)
+        
+    generated_csv = csv_files[0]
+
+    # 5. Exportar CSV como base64 (para envio via Evolution API)
+    with open(generated_csv, "rb") as f:
         csv_b64 = base64.b64encode(f.read()).decode("utf-8")
 
     # Emite variável de output para o Kestra
-    print(f'::{json.dumps({"outputs": {"csv_base64": csv_b64}})}::')
+    outputs = {
+        "csv_base64": csv_b64,
+        "csv_filename": os.path.basename(generated_csv)
+    }
+    print(f'::{json.dumps({"outputs": outputs})}::')
 
-    print(f"✅ Processamento concluído: {output_csv}")
+    print(f"✅ Processamento concluído: {generated_csv}")
 
 if __name__ == "__main__":
     download_and_extract()
