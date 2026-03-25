@@ -151,6 +151,18 @@ async def run():
                 logger.warning(f"Timeout aguardando Dashboard/Menu. Pode ser que falhe a seguir. Erro: {e}")
 
 
+        # --- TRATAMENTO MODAL ONBOARDING ---
+        # Após o login, pode aparecer um modal de "Novidades na VD+" que precisa ser fechado
+        logger.info("Verificando se há modal de onboarding/novidades...")
+        try:
+            botao_fechar_modal = page.locator("#conteudoSemPainel_onboardingModal_BotaoFecharStep1")
+            if await botao_fechar_modal.is_visible(timeout=5000):
+                logger.info("Modal de onboarding detectado! Fechando...")
+                await botao_fechar_modal.click()
+                await page.wait_for_timeout(1000)  # Aguarda animação de fechamento
+                logger.info("Modal de onboarding fechado com sucesso.")
+        except Exception as e:
+            logger.info(f"Nenhum modal de onboarding detectado (ok, seguindo): {e}")
 
         # --- Fluxo de Ranking de Vendas ---
         logger.info("Iniciando fluxo de filtros...")
