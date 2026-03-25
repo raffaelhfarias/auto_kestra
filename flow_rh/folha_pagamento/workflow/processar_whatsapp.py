@@ -1,6 +1,7 @@
 import os
 import sys
 import base64
+import json
 import subprocess
 import requests
 
@@ -79,7 +80,14 @@ def download_and_extract():
     if result.returncode != 0:
         print(f"❌ Falha no script de extração (Exit Code: {result.returncode})", file=sys.stderr)
         sys.exit(result.returncode)
-    
+
+    # 4. Exportar CSV como base64 (para envio via Evolution API)
+    with open(output_csv, "rb") as f:
+        csv_b64 = base64.b64encode(f.read()).decode("utf-8")
+
+    # Emite variável de output para o Kestra
+    print(f'::{json.dumps({"outputs": {"csv_base64": csv_b64}})}::')
+
     print(f"✅ Processamento concluído: {output_csv}")
 
 if __name__ == "__main__":
