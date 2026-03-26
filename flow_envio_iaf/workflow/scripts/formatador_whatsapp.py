@@ -75,8 +75,6 @@ class FormatadorWhatsapp:
         
         # --- PANORAMA ---
         panorama = dados.get("panorama", {})
-        atingimento = panorama.get("classificacao_pct", "N/D")
-        classificacao_raw = panorama.get("classificacao", "N/D")
         
         # Calcular pontuação do CP como soma dos pontos dos pilares
         pilares_brutos = dados.get("pilares", [])
@@ -84,6 +82,23 @@ class FormatadorWhatsapp:
             FormatadorWhatsapp._parse_pontos(p.get("pontos", "0"))
             for p in pilares_brutos
         )
+        
+        # Recalcular atingimento e classificação baseado na soma dos pilares
+        META_CP = 915.0
+        atingimento_pct = soma_pontos / META_CP if META_CP > 0 else 0
+        atingimento = f"{(atingimento_pct * 100):.2f}%".replace(".", ",")
+        
+        if atingimento_pct >= 0.95:
+            classificacao_raw = "Diamante"
+        elif atingimento_pct >= 0.85:
+            classificacao_raw = "Ouro"
+        elif atingimento_pct >= 0.75:
+            classificacao_raw = "Prata"
+        elif atingimento_pct >= 0.65:
+            classificacao_raw = "Bronze"
+        else:
+            classificacao_raw = "Não classificado"
+            
         # Formatar a pontuação (sem decimal se for inteiro)
         if soma_pontos == int(soma_pontos):
             pontuacao = f"{int(soma_pontos)} pts"
@@ -95,8 +110,7 @@ class FormatadorWhatsapp:
             "Bronze": "🥉",
             "Prata": "🥈",
             "Ouro": "🥇",
-            "Diamante": "💎",
-            "Não Classificado": "⚪",
+            "Diamante": "💎"
         }
         emoji_class = emojis_classificacao.get(classificacao_raw, "")
         classificacao = f"{emoji_class} {classificacao_raw}".strip()

@@ -17,9 +17,35 @@ class IAFPage:
     def __init__(self, page: Page):
         self.page = page
 
+    async def fechar_modal_satisfacao(self):
+        """Fecha o modal de pesquisa de satisfação do IAF, se aparecer."""
+        logger.info("Aguardando o modal de satisfação surgir (até 8 segundos)...")
+        
+        # Como "satisfação" pode ter problemas de encoding, buscamos "dashboard de IAF" que faz parte da mesma frase
+        modal_loc = self.page.locator("div[role='dialog'][data-flora='modal-content']:has-text('dashboard de IAF')")
+        
+        try:
+            await modal_loc.first.wait_for(state="visible", timeout=8000)
+            logger.info("Modal de satisfação detectado. Fechando...")
+            
+            close_btn = modal_loc.first.locator("button[data-flora='modal-close']")
+            if await close_btn.count() > 0:
+                await close_btn.first.click()
+                logger.info("Modal fechado via botão de fechar.")
+            else:
+                await self.page.keyboard.press("Escape")
+                logger.info("Modal fechado via Escape.")
+            
+            # Aguardar o modal desaparecer
+            await modal_loc.first.wait_for(state="hidden", timeout=5000)
+            logger.info("Tratamento do modal de satisfação concluído.")
+        except Exception:
+            logger.info("Nenhum modal de satisfação encontrado no tempo limite. Continuando fluxo.")
+
     async def aguardar_carregamento(self, timeout: int = 15000):
         """Aguarda a tabela de indicadores carregar na página."""
         logger.info("Aguardando carregamento da tabela de indicadores...")
+        await self.fechar_modal_satisfacao()
         await self.page.wait_for_selector("#IAFConsolidatedIndicators", timeout=timeout)
         await self.page.wait_for_timeout(2000)
         logger.info("Tabela de indicadores carregada.")
@@ -56,26 +82,33 @@ class IAFPage:
             logger.warning(f"Erro ao extrair pontuação do CP: {e}")
             panorama["pontuacao_cp"] = "N/D"
 
-        # Classificação (ex: "Não classificado")
+        # Calcular Classificação e Percentual a partir da pontuação
+        META_CP = 915.0
         try:
-            classificacao_el = self.page.locator("[data-flora='tag'][data-flora-text='Não classificado']").first
-            classificacao = await classificacao_el.inner_text()
-            panorama["classificacao"] = classificacao.strip()
-        except Exception:
-            try:
-                # Tentar pegar qualquer tag de classificação no contexto de Panorama
-                classificacao = await self.page.locator(".ant-space-item span[data-flora='tag']").first.inner_text()
-                panorama["classificacao"] = classificacao.strip()
-            except Exception as e:
-                logger.warning(f"Erro ao extrair classificação: {e}")
+            if panorama["pontuacao_cp"] != "N/D":
+                # Limpa a string (ex: "587,30 pts" ou "1.587,30")
+                num_str = panorama["pontuacao_cp"].replace(" pts", "").replace(" pts.", "").replace(".", "").replace(",", ".")
+                pontos_float = float(num_str)
+                atingimento_pct = pontos_float / META_CP
+                
+                panorama["classificacao_pct"] = f"{(atingimento_pct * 100):.2f}%".replace(".", ",")
+                
+                if atingimento_pct >= 0.95:
+                    panorama["classificacao"] = "Diamante"
+                elif atingimento_pct >= 0.85:
+                    panorama["classificacao"] = "Ouro"
+                elif atingimento_pct >= 0.75:
+                    panorama["classificacao"] = "Prata"
+                elif atingimento_pct >= 0.65:
+                    panorama["classificacao"] = "Bronze"
+                else:
+                    panorama["classificacao"] = "Sem classificação"
+            else:
                 panorama["classificacao"] = "N/D"
-
-        # Percentual de classificação (ex: "63,84%")
-        try:
-            pct_el = self.page.locator("span.sc-cHMHOW").first
-            panorama["classificacao_pct"] = (await pct_el.inner_text()).strip()
+                panorama["classificacao_pct"] = "N/D"
         except Exception as e:
-            logger.warning(f"Erro ao extrair % classificação: {e}")
+            logger.warning(f"Erro ao calcular classificação: {e}")
+            panorama["classificacao"] = "N/D"
             panorama["classificacao_pct"] = "N/D"
 
         # Rankings (Brasil, Regional, MUSK/Clube)
@@ -219,10 +252,46 @@ class IAFPage:
         """Extrai todos os dados da página IAF e retorna um dicionário consolidado."""
         await self.aguardar_carregamento()
 
+        panorama = await self.extrair_panorama()
+        pilares = await self.extrair_pilares()
+        
+        # Corrigir o panorama utilizando a soma dos pilares (se houver variação do site)
+        try:
+            soma_pontos = 0.0
+            for p in pilares:
+                pontos_str = p.get("pontos", "0")
+                match_pts = re.search(r'([\d\.,]+)\s*pts?', pontos_str) if pontos_str and pontos_str != "N/D" else None
+                if match_pts:
+                    num_str = match_pts.group(1).replace('.', '').replace(',', '.')
+                    try:
+                        soma_pontos += float(num_str)
+                    except ValueError:
+                        pass
+            
+            if soma_pontos > 0:
+                META_CP = 915.0
+                atingimento_pct = soma_pontos / META_CP
+                
+                panorama["pontuacao_cp"] = f"{soma_pontos:.2f} pts".replace('.', ',')
+                panorama["classificacao_pct"] = f"{(atingimento_pct * 100):.2f}%".replace(".", ",")
+                
+                if atingimento_pct >= 0.95:
+                    panorama["classificacao"] = "Diamante"
+                elif atingimento_pct >= 0.85:
+                    panorama["classificacao"] = "Ouro"
+                elif atingimento_pct >= 0.75:
+                    panorama["classificacao"] = "Prata"
+                elif atingimento_pct >= 0.65:
+                    panorama["classificacao"] = "Bronze"
+                else:
+                    panorama["classificacao"] = "Não classificado"
+        except Exception as e:
+            logger.warning(f"Erro ao recalcular panorama pela soma de pilares: {e}")
+
         dados = {
             "data_atualizacao": await self.extrair_data_atualizacao(),
-            "panorama": await self.extrair_panorama(),
-            "pilares": await self.extrair_pilares(),
+            "panorama": panorama,
+            "pilares": pilares,
             "indicadores": await self.extrair_indicadores(),
         }
 

@@ -30,32 +30,51 @@ class Navegador:
 
     async def setup_browser(self):
         """
-        Conecta ao Browserless via CDP com stealth e headless=false.
-        Usa o contexto default do Browserless (para manter stealth).
-        Carrega cookies do state.json manualmente se existir.
+        Inicia o browser.
+        - Docker/Kestra: conecta ao Browserless via CDP (headless gerenciado pelo Browserless).
+        - Local (Windows): lança Chromium local com headless=False para visualização.
         """
-        logger.info("Iniciando browser via Browserless (stealth=ON, headless=OFF)...")
         self.playwright = await async_playwright().start()
 
-        # Monta URL CDP do Browserless
-        cdp_url = self._build_cdp_url()
+        # Verifica se estamos em ambiente Docker/Kestra (geralmente sem display)
+        is_docker = os.path.exists("/.dockerenv")
 
-        # Conecta ao Browserless
-        self.browser = await self.playwright.chromium.connect_over_cdp(cdp_url)
+        if is_docker:
+            # --- Modo Docker: conecta ao Browserless via CDP ---
+            logger.info("Ambiente Docker detectado. Conectando ao Browserless (stealth=ON)...")
+            cdp_url = self._build_cdp_url()
+            self.browser = await self.playwright.chromium.connect_over_cdp(cdp_url)
 
-        # IMPORTANTE: Usar o contexto default do Browserless para manter stealth!
-        # Criar new_context() perde as flags anti-deteccao e o Google bloqueia.
-        if self.browser.contexts:
-            self.context = self.browser.contexts[0]
-            logger.info("Usando contexto default do Browserless (stealth preservado).")
+            # IMPORTANTE: Usar o contexto default do Browserless para manter stealth!
+            # Criar new_context() perde as flags anti-deteccao e o Google bloqueia.
+            if self.browser.contexts:
+                self.context = self.browser.contexts[0]
+                logger.info("Usando contexto default do Browserless (stealth preservado).")
+            else:
+                self.context = await self.browser.new_context(
+                    viewport={"width": 1366, "height": 768},
+                    locale="pt-BR",
+                )
+                logger.info("Novo contexto criado (Browserless sem contexto default).")
         else:
+            # --- Modo Local: lança Chromium local sem headless ---
+            logger.info("Ambiente local detectado. Iniciando browser local (headless=False)...")
+            self.browser = await self.playwright.chromium.launch(
+                headless=False,
+                args=[
+                    "--disable-blink-features=AutomationControlled",
+                    "--no-sandbox",
+                    "--disable-setuid-sandbox"
+                ]
+            )
             self.context = await self.browser.new_context(
                 viewport={"width": 1366, "height": 768},
                 locale="pt-BR",
+                accept_downloads=True
             )
-            logger.info("Novo contexto criado (Browserless sem contexto default).")
+            logger.info("Contexto criado (headless=False, downloads=ON).")
 
-        # Carrega cookies do state.json manualmente no contexto default
+        # Carrega cookies do state.json manualmente no contexto
         script_dir = os.path.dirname(__file__)
         state_path = os.path.join(script_dir, "..", "..", "state.json")
 
@@ -88,13 +107,14 @@ class Navegador:
         self.page = self.context.pages[0] if self.context.pages else await self.context.new_page()
         self.page.set_default_timeout(60000)
 
-        # Força timezone do browser para America/Sao_Paulo via CDP
-        try:
-            cdp_session = await self.context.new_cdp_session(self.page)
-            await cdp_session.send("Emulation.setTimezoneOverride", {"timezoneId": "America/Sao_Paulo"})
-            logger.info("Timezone do browser forçado para America/Sao_Paulo via CDP.")
-        except Exception as e:
-            logger.warning(f"Não foi possível forçar timezone via CDP: {e}")
+        # Força timezone do browser para America/Sao_Paulo via CDP (apenas em modo Docker)
+        if is_docker:
+            try:
+                cdp_session = await self.context.new_cdp_session(self.page)
+                await cdp_session.send("Emulation.setTimezoneOverride", {"timezoneId": "America/Sao_Paulo"})
+                logger.info("Timezone do browser forçado para America/Sao_Paulo via CDP.")
+            except Exception as e:
+                logger.warning(f"Não foi possível forçar timezone via CDP: {e}")
 
         return self.page
 
