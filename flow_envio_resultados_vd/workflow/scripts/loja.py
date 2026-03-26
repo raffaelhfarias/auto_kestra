@@ -164,6 +164,19 @@ async def run():
         except Exception as e:
             logger.info(f"Nenhum modal de onboarding detectado (ok, seguindo): {e}")
 
+        # --- TRATAMENTO MODAL AVISO IMPORTANTE (Painel Superior) ---
+        # Após o login, pode aparecer um painel de "Aviso Importante" de segurança que precisa ser fechado
+        logger.info("Verificando se há painel de aviso importante...")
+        try:
+            botao_fechar_aviso = page.locator("#painelSuperior a.btn-close")
+            if await botao_fechar_aviso.is_visible(timeout=5000):
+                logger.info("Painel de aviso importante detectado! Fechando...")
+                await botao_fechar_aviso.click()
+                await page.wait_for_timeout(1000)  # Aguarda animação de fechamento
+                logger.info("Painel de aviso importante fechado com sucesso.")
+        except Exception as e:
+            logger.info(f"Nenhum painel de aviso importante detectado (ok, seguindo): {e}")
+
         # --- Fluxo de Ranking de Vendas ---
         logger.info("Iniciando fluxo de filtros...")
 
